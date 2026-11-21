@@ -1,0 +1,15 @@
+{
+  "name": "super-slasher-5000",
+  "productName": "SuperSlasher5000",
+  "version": "0.1.0",
+  "description": "The Super Slasher 5000 - first-person hack & slash (HTML game, packaged portable with Electron)",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "node build.js"
+  },
+  "devDependencies": {
+    "@electron/packager": "^18.3.6",
+    "electron": "^33.2.0"
+  }
+}
