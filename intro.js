@@ -383,8 +383,7 @@ const PANELS = [
   { paint:pnBusiness, caps:[['THEY TOOK A SPECIAL INTEREST...','tl'], ['...IN BUSINESS.','br']] },
   { paint:pnTower,    caps:[['5 YEARS LATER.','tl'], ['THE FIRST ALIEN-OWNED COMPANY OPENS ITS DOORS.','tl']] },
   { paint:pnTakeover, caps:[['10 YEARS LATER.','tl'], ['THEY HAVE BOUGHT OUT 80% OF ALL HUMAN BUSINESSES.','tl'], ['A HOSTILE TAKEOVER.','br','#e08f8a']] },
-  { paint:pnAlley, over:pnRain, caps:[['THE REMAINING HUMANS ARE NOW TRYING TO SURVIVE...','tl'], ['...AND AVOID A SIMILAR FATE.','br']] },
-  { paint:pnFridge, now:true, caps:[['SATURDAY. 7:42 AM.','tl'], ['YOU ARE OUT OF MILK.','br','#e8c860']] } ];
+  { paint:pnAlley, over:pnRain, caps:[['THE REMAINING HUMANS ARE NOW TRYING TO SURVIVE...','tl'], ['...AND AVOID A SIMILAR FATE.','br']] } ];
 const CAP_GAP = 0.9;                                                      // seconds between caption boxes popping in
 const panelCache = [];
 function panelCanvas(i){
@@ -423,19 +422,36 @@ function human(g, x, y, s, c){ cell(g, x, y-17*s, 3.2*s, 3.6*s, c); cpoly(g, [x-
 function fig(g, x, fy, s, o){                                             // standing figure, feet at fy (~66*s tall)
   g.fillStyle = o.pants || o.suit; g.fillRect(x-4*s, fy-24*s, 3.2*s, 24*s); g.fillRect(x+0.8*s, fy-24*s, 3.2*s, 24*s);
   cpoly(g, [x-7*s,fy-46*s, x+7*s,fy-46*s, x+6*s,fy-22*s, x-6*s,fy-22*s], o.suit);
+  if (o.shirt) cpoly(g, [x-2.4*s,fy-46*s, x+2.4*s,fy-46*s, x,fy-36*s], o.shirt);
   if (o.tie) cpoly(g, [x-s,fy-45*s, x+s,fy-45*s, x+1.2*s,fy-32*s, x,fy-30*s, x-1.2*s,fy-32*s], o.tie);
+  if (o.badge){ g.fillStyle = '#5f89ab'; g.fillRect(x+2*s, fy-46*s, 0.7*s, 8*s); g.fillStyle = NAVY; g.fillRect(x+2.2*s, fy-38.6*s, 3.4*s, 4*s); g.fillStyle = '#e8e6e0'; g.fillRect(x+2.7*s, fy-38*s, 2.4*s, 2.8*s); }   // lanyard + ID badge
   for (const sd of [-1,1]){
     const ext = (o.arm === 'r' && sd === 1) || (o.arm === 'l' && sd === -1);
     const ex = ext ? o.armTo[0] : x+sd*8.5*s, ey = ext ? o.armTo[1] : fy-24*s;
     g.strokeStyle = o.suit; g.lineWidth = 3.2*s; g.lineCap = 'round'; g.beginPath(); g.moveTo(x+sd*6.5*s, fy-44*s); g.lineTo(ex, ey); g.stroke();
     cell(g, ex, ey, 1.8*s, 1.8*s, o.skin);
   }
-  if (o.alien){
-    cell(g, x, fy-56*s, 7*s, 10*s, o.skin);
-    for (const sd of [-1,1]){ g.fillStyle = o.eye || NAVY; g.beginPath(); g.ellipse(x+sd*3.2*s, fy-56*s, 2.9*s, 1.5*s, -sd*0.5, 0, 6.3); g.fill(); }   // big eyes, slanted up at the outer corners
+  if (o.alien){                                                           // same head as the in-game recruiters (sprites.js)
+    const hy = fy-56*s;
+    g.strokeStyle = o.skin2; g.lineWidth = Math.max(1, 0.9*s); g.lineCap = 'round'; g.beginPath();
+    g.moveTo(x-2.6*s, hy-7*s); g.lineTo(x-3.6*s, hy-11.5*s); g.moveTo(x+2.6*s, hy-7*s); g.lineTo(x+3.6*s, hy-11.5*s); g.stroke();   // antennae
+    cell(g, x-3.8*s, hy-12*s, 1.7*s, 1.2*s, o.bulb); cell(g, x+3.8*s, hy-12*s, 1.7*s, 1.2*s, o.bulb);                            // glowing bulbs
+    cell(g, x+1.1*s, hy, 8*s, 8.5*s, o.skin2); cell(g, x+0.8*s, hy+5*s, 5.6*s, 5*s, o.skin2);                                       // shaded right side
+    cell(g, x, hy, 8*s, 8.5*s, o.skin); cell(g, x, hy+5*s, 5.6*s, 5*s, o.skin);                                                     // egg head: wide crown, narrow jaw
+    for (const sd of [-1,1]){
+      g.fillStyle = NAVY; g.beginPath(); g.ellipse(x+sd*3.6*s, hy+0.8*s, 3.4*s, 1.9*s, -sd*0.6, 0, 6.3); g.fill();                  // big black eyes, slanted down toward the middle
+      cell(g, x+sd*5*s, hy-0.6*s, 0.7*s, 0.7*s, '#fdf6e3');
+    }
+    g.fillStyle = NAVY; g.fillRect(x-1.5*s, hy+7*s, 3*s, Math.max(1, 0.6*s));
   } else { cell(g, x, fy-51*s, 4.6*s, 5.6*s, o.skin); if (o.hair) cell(g, x, fy-54.5*s, 4.9*s, 3*s, o.hair); }
 }
-const SIL = { skin:NAVY, suit:NAVY, alien:true, eye:'#3cff8a' };          // alien silhouette with glowing eyes
+/* recruiter look straight from ENEMY_COL (grunt / runner / thrower); f darkens it for backlit shots; plain = no office wear yet */
+function alienLook(kind, f, plain, extra){
+  const k = ENEMY_COL[kind], d = c => f === 1 ? c : shade(c, f);
+  const o = { alien:true, skin:d(k.skin), skin2:d(k.skin2), suit:d(k.suit), pants:d(k.suit), bulb:k.bulb };
+  if (plain){ o.suit = o.pants = d('#5a6275'); } else { o.shirt = d(k.shirt); o.tie = d(k.tie); o.badge = true; }
+  return Object.assign(o, extra);
+}
 
 /* 1 - first contact: a figure in a beam of light over a crowd */
 function pnContact(g){
@@ -446,8 +462,8 @@ function pnContact(g){
   halftone(g, 130, 14, 220, 192, '#e8c860', 5, (x,y) => { const t = (y-14)/192, half = 18+t*87, d = Math.abs(x-240)/half; return d < 1 && d > 0.5 ? (1-d)*3 : 0; });
   cell(g, 240, 14, 50, 9, '#fdf6e3');
   g.fillStyle = '#2c3142'; g.fillRect(10, 200, 460, 60);
-  cell(g, 240, 206, 74, 7, 'rgba(253,246,227,.45)');
-  fig(g, 240, 206, 2.6, SIL);
+  cell(g, 240, 214, 74, 7, 'rgba(253,246,227,.45)');
+  fig(g, 240, 214, 2.0, alienLook('grunt', 0.8, true));                  // head kept below the caption boxes
   _s = 12;
   for (let x=14; x<470; x+=11){ const s = 1.5+rnd()*0.5, hx = x+ri(-2,2); human(g, hx, 268, s, NAVY); if (rnd() < 0.2){ g.fillStyle = '#bcd6e8'; g.fillRect(hx-1, 268-26*s-ri(2,6), 3, 4); } }
 }
@@ -455,12 +471,12 @@ function pnContact(g){
 function pnLeaders(g){
   g.fillStyle = '#7a2a30'; g.fillRect(10,14,460,242);
   for (let x=10; x<470; x+=18){ g.fillStyle = '#b5463f'; g.fillRect(x+3,14,4,180); g.fillStyle = 'rgba(27,31,46,.35)'; g.fillRect(x+13,14,3,180); }
-  g.fillStyle = '#efe3cf'; g.fillRect(244,24,170,20); g.fillStyle = NAVY; g.font = 'bold 11px monospace'; g.textAlign = 'center'; g.fillText('WELCOME, VISITORS', 329, 38);   // right of the captions
+  g.fillStyle = '#efe3cf'; g.fillRect(234,24,166,20); g.fillStyle = NAVY; g.font = 'bold 11px monospace'; g.textAlign = 'center'; g.fillText('WELCOME, VISITORS', 317, 38);   // right of the captions
   for (const fx of [60, 424]){ g.fillStyle = '#a3aab8'; g.fillRect(fx,60,2,132); cpoly(g, [fx+2,62, fx+32,67, fx+30,86, fx+2,82], '#4a90d9'); g.fillStyle = '#efe3cf'; g.fillRect(fx+12,70,8,6); }
   g.fillStyle = '#3f4658'; g.fillRect(10,190,460,70); g.fillStyle = '#5a6275'; g.fillRect(10,190,460,4);
   for (const [x,y,r] of [[110,118,24],[385,96,20],[335,168,14],[160,58,13]]){ cell(g, x, y, r*1.3, r*1.3, 'rgba(253,246,227,.25)'); burst(g, x, y, r, '#fdf6e3'); }
   fig(g, 205, 200, 2.2, { skin:'#f1c27d', hair:'#a3aab8', suit:'#2c3142', pants:NAVY, tie:'#b5463f', arm:'r', armTo:[238,138] });
-  fig(g, 275, 200, 2.4, { skin:'#8fa66a', suit:'#5a6275', alien:true, eye:NAVY, arm:'l', armTo:[242,138] });
+  fig(g, 275, 200, 2.1, alienLook('grunt', 1, true, { arm:'l', armTo:[242,138] }));   // antennae stay under the banner
   for (let x=24; x<470; x+=28){ human(g, x, 274, 2.3, NAVY); g.fillStyle = NAVY; g.fillRect(x-5, 274-46, 10, 7); cell(g, x, 274-42.5, 2, 2, '#bcd6e8'); }
 }
 /* 3 - "...in business": huge alien profile, a rising chart in its eye */
@@ -498,7 +514,7 @@ function pnTower(g){
   g.fillStyle = '#3f4658'; g.fillRect(10,232,460,30);
   g.fillStyle = '#c9cdd6'; g.fillRect(172,214,3,20); g.fillRect(305,214,3,20);
   g.strokeStyle = '#ff5a4a'; g.lineWidth = 3; g.beginPath(); g.moveTo(174,218); g.quadraticCurveTo(205,226, 228,238); g.moveTo(306,218); g.quadraticCurveTo(275,226, 252,238); g.stroke();   // cut ribbon
-  fig(g, 240, 256, 1.15, SIL);
+  fig(g, 240, 256, 1.15, alienLook('grunt', 1, false));
   g.strokeStyle = '#c9cdd6'; g.lineWidth = 2; g.beginPath(); g.moveTo(250,228); g.lineTo(266,214); g.moveTo(250,222); g.lineTo(268,224); g.stroke();   // giant scissors
   for (const x of [40,62,90,112,138,350,372,398,420,446]) human(g, x, 262, 1.3, NAVY);
 }
@@ -531,31 +547,16 @@ function pnAlley(g){
   for (let k=1; k<12; k++){ const f = k/12; g.beginPath(); g.moveTo(10, 14+f*242); g.lineTo(250, 96+f*76); g.moveTo(470, 14+f*242); g.lineTo(350, 96+f*76); g.stroke(); }
   cpoly(g, [250,172, 350,172, 470,256, 10,256], NAVY);
   cell(g, 210, 232, 54, 6, '#3f5f82'); cell(g, 318, 206, 30, 4, '#5f89ab');
-  for (const x of [280, 300, 322]) fig(g, x, 172, 0.75, SIL);
-  g.fillStyle = '#efe3cf'; g.fillRect(306,138,10,13);                     // the contract
-  for (const x of [278, 282, 298, 302, 320, 324]) g.fillRect(x, 192, 1, 2), cell(g, x, 193, 1, 1, '#3cff8a');   // eyes reflected in the puddle
+  const crew = [[278,'runner'], [300,'grunt'], [322,'thrower']];
+  for (const [x,kind] of crew) fig(g, x, 172, 0.8, alienLook(kind, 0.88, false, kind === 'grunt' ? { arm:'r', armTo:[309,146] } : {}));
+  g.fillStyle = '#efe3cf'; g.fillRect(306,137,11,14); g.fillStyle = '#7d8597'; g.fillRect(308,140,7,1); g.fillRect(308,143,7,1);   // the contract
+  for (const [x,kind] of crew) for (const sd of [-1,1]) cell(g, x+sd*3, 199, 1.2, 1, ENEMY_COL[kind].bulb);   // antenna bulbs reflected in the puddle
   cpoly(g, [14,168, 140,160, 150,256, 10,256], '#34502f'); cpoly(g, [10,160, 140,150, 146,162, 14,172], '#4a6b3c');
   g.fillStyle = '#4a6b3c'; for (const x of [40, 80, 118]) g.fillRect(x, 172, 3, 84);
   cell(g, 160, 232, 18, 26, NAVY); cell(g, 156, 196, 10, 11, NAVY); cell(g, 147, 184, 4, 3, NAVY);   // someone crouched behind the dumpster
   cell(g, 162, 195, 2.6, 1.6, '#efe3cf'); g.fillStyle = NAVY; g.fillRect(163, 194, 1, 2);
 }
 function pnRain(g){ _s = 3; g.strokeStyle = 'rgba(188,214,232,.5)'; g.lineWidth = 1; g.beginPath(); for (let i=0;i<260;i++){ const x = ri(10,484), y = ri(4,256); g.moveTo(x,y); g.lineTo(x-4,y+11); } g.stroke(); }
-/* 7 - the present: an empty fridge */
-function pnFridge(g){
-  g.fillStyle = NAVY; g.fillRect(10,14,460,242); g.fillStyle = '#2c3142'; g.fillRect(10,214,460,42);
-  cpoly(g, [160,222, 300,222, 440,256, 40,256], 'rgba(232,230,224,.3)');
-  cell(g, 80, 62, 18, 18, '#5a6275'); cell(g, 80, 62, 15, 15, '#efe3cf');
-  g.strokeStyle = NAVY; g.lineWidth = 2; g.lineCap = 'round'; const ha = (7+42/60)/12*6.283-1.571, ma = 42/60*6.283-1.571;
-  g.beginPath(); g.moveTo(80,62); g.lineTo(80+Math.cos(ha)*8, 62+Math.sin(ha)*8); g.moveTo(80,62); g.lineTo(80+Math.cos(ma)*12, 62+Math.sin(ma)*12); g.stroke();
-  g.fillStyle = '#7d8597'; g.fillRect(150,26,156,198); g.fillStyle = '#e8e6e0'; g.fillRect(160,36,136,180); g.fillStyle = '#d4d0c8'; g.fillRect(166,42,124,170);
-  g.fillStyle = '#fdf6e3'; g.fillRect(204,40,48,4);
-  g.fillStyle = '#a3aab8'; for (const y of [92,140,184]) g.fillRect(162, y, 132, 3);
-  cpoly(g, [306,26, 384,12, 384,250, 306,224], '#c9cdd6'); cpoly(g, [314,36, 376,24, 376,238, 314,214], '#a3aab8');
-  g.fillStyle = '#7d8597'; for (const y of [80,140,196]) g.fillRect(314, y, 62, 3);
-  g.fillStyle = '#6b8650'; g.fillRect(232,118,14,22); g.fillStyle = '#c9cdd6'; g.fillRect(231,114,16,5);   // one lonely pickle jar
-  g.fillStyle = '#efe3cf'; g.fillRect(194,172,34,12); g.fillStyle = '#4a90d9'; g.fillRect(202,172,10,12); cpoly(g, [228,172, 237,178, 228,184], '#efe3cf');   // empty carton on its side
-  cell(g, 240, 190, 1.5, 2, '#efe3cf'); cell(g, 246, 186, 7, 1.5, '#efe3cf');
-}
 function drawCard(){                                                      // whole card frame: one drawImage + a short fade-in
   const c = IN.card; dctx.imageSmoothingEnabled = false; dctx.drawImage(panelCanvas(c.page), 0, 0, DW, DH);
   if (c.t < 0.3){ dctx.globalAlpha = 1 - c.t/0.3; HR(0,0,DW,DH,'#000'); dctx.globalAlpha = 1; }

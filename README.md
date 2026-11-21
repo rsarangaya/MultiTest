@@ -11,9 +11,9 @@ mood swap to crimson during waves. Plain HTML/JS (three.js) - no build needed to
   `resources\app\` and relaunch, no rebuild needed. F11 = fullscreen.
 
 ## Flow
-Main menu (Start / Continue / Options / Exit) -> **comic prologue** (7 dark flashback stills with caption boxes: first contact, the summit,
-"...in business", the first alien-owned company, the 80% hostile takeover, humans hiding, then the empty fridge; click/Enter pages, ESC skips;
-each still is painted once and cached) -> isometric intro (wake up, mirror + character creator, breakfast with mom,
+Main menu (Start / Continue / Options / Exit) -> **comic prologue** (6 dark flashback stills with caption boxes: first contact, the summit,
+"...in business", the first alien-owned company, the 80% hostile takeover, humans hiding from recruiters; the aliens use the in-game
+recruiter look; click/Enter pages, ESC skips; each still is painted once and cached) -> isometric intro (wake up, mirror + character creator, breakfast with mom,
 name entry, wallet from the stand, weapon from the chest, out the door; ESC skips) -> arrival shot outside (iso view, then the camera pans into first person) -> **get to MOO-MART now**
 (follow the beam, north-east) -> the door is locked until 9 AM -> **survive 3 waves of alien recruiters** (the clock runs
 8:30 -> 9:00) -> the store opens -> get the milk.
