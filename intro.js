@@ -417,7 +417,7 @@ function halftone(g, x0, y0, w, h, c, step, fn){
   g.fillStyle = c;
   for (let y=y0, row=0; y<y0+h; y+=step, row++) for (let x=x0+(row&1 ? step/2 : 0); x<x0+w; x+=step){ const r = Math.min(step*0.75, fn(x,y)); if (r > 0.35){ g.beginPath(); g.arc(x,y,r,0,6.3); g.fill(); } }
 }
-function burst(g, x, y, r, c){ const p = []; for (let i=0;i<16;i++){ const a = i/16*6.283, rr = i%2 ? r*0.3 : r*(0.7+((i*7)%5)/10); p.push(x+Math.cos(a)*rr, y+Math.sin(a)*rr); } cpoly(g, p, c); }
+function starBurst(g, x, y, r, c){ const p = []; for (let i=0;i<16;i++){ const a = i/16*6.283, rr = i%2 ? r*0.3 : r*(0.7+((i*7)%5)/10); p.push(x+Math.cos(a)*rr, y+Math.sin(a)*rr); } cpoly(g, p, c); }
 function human(g, x, y, s, c){ cell(g, x, y-17*s, 3.2*s, 3.6*s, c); cpoly(g, [x-5.5*s,y-12*s, x+5.5*s,y-12*s, x+6.5*s,y, x-6.5*s,y], c); }   // head-and-shoulders silhouette
 function fig(g, x, fy, s, o){                                             // standing figure, feet at fy (~66*s tall)
   g.fillStyle = o.pants || o.suit; g.fillRect(x-4*s, fy-24*s, 3.2*s, 24*s); g.fillRect(x+0.8*s, fy-24*s, 3.2*s, 24*s);
@@ -474,7 +474,7 @@ function pnLeaders(g){
   g.fillStyle = '#efe3cf'; g.fillRect(234,24,166,20); g.fillStyle = NAVY; g.font = 'bold 11px monospace'; g.textAlign = 'center'; g.fillText('WELCOME, VISITORS', 317, 38);   // right of the captions
   for (const fx of [60, 424]){ g.fillStyle = '#a3aab8'; g.fillRect(fx,60,2,132); cpoly(g, [fx+2,62, fx+32,67, fx+30,86, fx+2,82], '#4a90d9'); g.fillStyle = '#efe3cf'; g.fillRect(fx+12,70,8,6); }
   g.fillStyle = '#3f4658'; g.fillRect(10,190,460,70); g.fillStyle = '#5a6275'; g.fillRect(10,190,460,4);
-  for (const [x,y,r] of [[110,118,24],[385,96,20],[335,168,14],[160,58,13]]){ cell(g, x, y, r*1.3, r*1.3, 'rgba(253,246,227,.25)'); burst(g, x, y, r, '#fdf6e3'); }
+  for (const [x,y,r] of [[110,118,24],[385,96,20],[335,168,14],[160,58,13]]){ cell(g, x, y, r*1.3, r*1.3, 'rgba(253,246,227,.25)'); starBurst(g, x, y, r, '#fdf6e3'); }
   fig(g, 205, 200, 2.2, { skin:'#f1c27d', hair:'#a3aab8', suit:'#2c3142', pants:NAVY, tie:'#b5463f', arm:'r', armTo:[238,138] });
   fig(g, 275, 200, 2.1, alienLook('grunt', 1, true, { arm:'l', armTo:[242,138] }));   // antennae stay under the banner
   for (let x=24; x<470; x+=28){ human(g, x, 274, 2.3, NAVY); g.fillStyle = NAVY; g.fillRect(x-5, 274-46, 10, 7); cell(g, x, 274-42.5, 2, 2, '#bcd6e8'); }

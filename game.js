@@ -1308,16 +1308,25 @@ function idleCamera(real){
   }
 }
 let lastT = performance.now();
-function frame(now){
-  const t0 = performance.now(), raw = (now-lastT)/1000, real = Math.max(0, Math.min(0.05, raw))*DBG.scale;   // never negative (clock hiccups / tab switches) lastT = now;
+function frame(now){ try { tick(now); } catch(e){ console.error(e); } requestAnimationFrame(frame); }   // an error in one frame must never kill the loop (that was the "freeze")
+function tick(now){
+  /* game speed = real elapsed time, never the monitor's refresh rate. Long frames (tab switch, hitch) are capped at 0.1 s so nothing
+     teleports, and gameplay runs in fixed sub-steps of at most 1/60 s so physics behaves the same at 30, 60 or 144 Hz. */
+  const t0 = performance.now(), raw = (now-lastT)/1000; lastT = now;
+  const real = Math.max(0, Math.min(0.1, raw))*DBG.scale;
   if (DBG.on){ debugActions(); if (raw > 0) DBG.fps += (1/raw - DBG.fps)*0.1; DBG.noteT -= raw; }
-  let dt = real; if (G.hitstop > 0){ G.hitstop -= real; dt = 0; }
   if (state === 'intro' || state === 'card') introUpdate(real*(keys.KeyF ? 4 : 1));   // hold F to fast-forward
-  else if (state === 'store') updateStore(dt);
+  else if (state === 'store') updateStore(real);
   else {
     if (state === 'play' && pressed.Escape) openPause();
-    if (state === 'play') update(dt, real);
-    else {
+    if (state === 'play'){
+      const steps = Math.max(1, Math.ceil(real/(1/60) - 1e-6)), h = real/steps;
+      for (let i=0; i<steps && state === 'play'; i++){
+        let dt = h; if (G.hitstop > 0){ G.hitstop -= h; dt = 0; }
+        update(dt, h);
+        if (i === 0) for (const k in pressed) delete pressed[k];          // one-shot key presses act on the first sub-step only
+      }
+    } else {
       menuNav(); idleCamera(real);
       if (state === 'dead') deadT += real;
     }
@@ -1326,6 +1335,5 @@ function frame(now){
   render(now);
   if (DBG.on){ DBG.ms += (performance.now()-t0 - DBG.ms)*0.1; drawDebug(); }
   for (const k in pressed) delete pressed[k];
-  requestAnimationFrame(frame);
 }
 function boot(){ requestAnimationFrame(frame); }
