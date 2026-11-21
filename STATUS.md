@@ -1,6 +1,6 @@
 # STATUS - The Super Slasher 5000
 
-Updated: 2026-11-20
+Updated: 2026-11-21
 
 ## What it is
 First-person hack & slash (three.js, plain HTML/JS, optional Electron portable exe). Pixel-art look from the *Dead-End Job* opening
@@ -19,6 +19,10 @@ First-person hack & slash (three.js, plain HTML/JS, optional Electron portable e
 - **Freeze fix (this session):** root cause was a name clash - the comic helper `burst()` in `intro.js` overwrote the game's particle
   `burst()`, which threw an error on the first enemy spawn/hit. That error stopped the frame loop. Helper renamed `starBurst`, and
   `frame()` now catches errors per frame and always re-queues itself (`tick()` holds the real work).
+- **Store polish:** first visit now shows a first-person arm grabbing and rattling the closed door. Entering the open store walks to the door, pulls it
+  (chime), fades to black and fades the store in; leaving walks out the door and fades to the street (`FADE` / `fadeTo()` in `game.js`).
+- **Store difficulty:** map is 16x11 (was 14x10), 5 patrolling guards (faster, longer/wider vision, quicker suspicion, wider look sweeps), recruiter
+  battle HP 30 (was 14) and harder hits. Cashier + gag recruiter live in the bottom-left corner, no patrol route goes near it.
 
 ## Verified (scripted, in the preview browser)
 - Same walk distance at 30/60/144/240 Hz; intro clock = real time at every rate.

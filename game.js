@@ -766,6 +766,28 @@ function startStoreCut(){
   for (const e of enemies.slice()) removeEnemy(e);
   P.vx = P.vz = P.vy = 0; P.sliding = false; P.blocking = false; atk.state = 'idle'; P.spin = 0;
 }
+/* store is open: walk to the door, pull it, chime, fade to black, then the isometric store fades in */
+function startEnterStore(){
+  startStoreCut(); OBJ.phase = 'enter'; OBJ.seen = true; signSprite.material.map = openTex;
+}
+/* first-person arm reaching for the door handle (used instead of the sword during the door scenes) */
+function drawDoorHand(g){
+  const a = OBJ.arr === undefined ? -1 : OBJ.t - OBJ.arr, en = OBJ.phase === 'enter';
+  let reach = a < 0 ? 0 : Math.min(1, a/0.35); if (!en && a > 2.1) reach = Math.max(0, 1 - (a-2.1)/0.4);
+  if (reach <= 0){ vm.x = 388; vm.y = 300; vm.a = 0.3; return; }                 // keep the sword down so it slides back up afterwards
+  let hx = LW/2 + 34, hy = LH + 20 - reach*(LH*0.5 - 4);
+  if (!en) for (const tr of [0.5, 1.0, 1.5]){ const d = a - tr; if (d > 0 && d < 0.24){ const s = Math.sin(d/0.24*Math.PI); hx += s*7*(tr === 1.0 ? -1 : 1); hy -= s*10; } }
+  else if (a > 0.45 && a < 1.0){ const s = Math.sin((a-0.45)/0.55*Math.PI); hy -= s*16; hx -= s*8; }
+  const skin = SKIN_C[CHAR.skin], hand = CHAR.gloves ? GLOVE_C[CHAR.gloves] : skin, base = TOP_C[CHAR.topCol];
+  const armCol = CHAR.outer ? (CHAR.outer === 3 ? '#efe3cf' : OUTER_C[CHAR.outerCol||0]) : CHAR.top === 1 ? skin : CHAR.top === 4 ? shade(base,.75) : base;
+  g.save(); g.lineCap = 'butt'; g.lineJoin = 'round';
+  seg(g, hx-24, hy+6, hx+22, hy+6, 8, NAVY); seg(g, hx-24, hy+6, hx+22, hy+6, 4, '#a3aab8');          // the door handle
+  const ax = hx + 70, ay = LH + 90;
+  seg(g, hx, hy, ax, ay, 40, NAVY); seg(g, hx, hy, ax, ay, 33, armCol);
+  g.fillStyle = NAVY; g.beginPath(); g.arc(hx, hy, 13, 0, 6.3); g.fill(); g.fillStyle = hand; g.beginPath(); g.arc(hx, hy, 10, 0, 6.3); g.fill();
+  seg(g, hx-7, hy-2, hx+7, hy-2, 3, shade(hand, .75));                                                   // knuckles
+  g.restore();
+}
 function rattle(){ G.shake = Math.max(G.shake, 0.3); noise(0.1,0.35,500); tone('square',100,60,0.1,0.22); }
 function updateCut(dt){
   OBJ.t += dt; P.vx = P.vz = P.vy = 0;
@@ -777,6 +799,11 @@ function updateCut(dt){
   if (OBJ.arr !== undefined){
     const a = OBJ.t - OBJ.arr;
     if (a > 0.5 && OBJ.r < 1){ OBJ.r = 1; rattle(); } if (a > 1.0 && OBJ.r < 2){ OBJ.r = 2; rattle(); } if (a > 1.5 && OBJ.r < 3){ OBJ.r = 3; rattle(); }
+    if (OBJ.phase === 'enter'){
+      if (a > 0.5 && OBJ.r < 1){ OBJ.r = 1; noise(0.1,0.3,700); tone('sine',1320,1320,0.35,0.12); tone('sine',880,880,0.5,0.12); }   // door opens + bell
+      if (a > 0.8 && OBJ.r < 2){ OBJ.r = 2; fadeTo(1, 0.9, () => { OBJ.phase = 'open'; beacon.visible = false; saveProgress(); startStore(); FADE.a = 1; fadeTo(0, 1.1); }); }
+      return;
+    }
     if (a > 2.0 && OBJ.r < 4){ OBJ.r = 4; signSprite.visible = true; sfx.parry(); msg('CLOSED.  OPENS AT 9 AM.', 3, '#ff5a4a'); }
     if (a > 4.2){ OBJ.phase = 'survive'; Wave.n = 0; Wave.state = 'break'; Wave.breakT = 2.0; msg('SURVIVE UNTIL THE STORE OPENS!', 3.6, '#ffe14a'); }
   }
@@ -900,7 +927,7 @@ function exitGame(){ try { window.close(); } catch(e){} setTimeout(() => { state
 function update(dt, real){
   if (OBJ.phase === 'arrive'){ updateArrive(real*(keys.KeyF ? 4 : 1)); return; }
   if (dt > 0){
-    if (OBJ.phase === 'cut') updateCut(dt*(keys.KeyF ? 4 : 1)); else { updatePlayer(dt); updateCombat(dt); }
+    if (OBJ.phase === 'cut' || OBJ.phase === 'enter') updateCut(dt*(keys.KeyF ? 4 : 1)); else { updatePlayer(dt); updateCombat(dt); }
     for (const e of enemies.slice()) updateEnemy(e, dt);
     updateProjectiles(dt); updateParticles(dt); updateCoffee(dt); updatePads(dt); updateVending(); if (OBJ.phase === 'survive' || OBJ.phase === 'endless' || OBJ.phase === 'home') updateWaves(dt);
     G.time += dt; G.style = Math.max(0, Math.min(100, G.style - dt*(G.speed < 3 && P.onGround ? 10 : 4))); G.comboT -= dt; if (G.comboT <= 0) G.combo = 0; G.vign = Math.max(0, G.vign - dt*1.6);
@@ -909,7 +936,7 @@ function update(dt, real){
     for (const h of G.hits) h.t -= dt; if (G.hits.length && G.hits[0].t <= 0) G.hits = G.hits.filter(h => h.t > 0);
     if (Math.hypot(P.x-OBJ.x, P.z-OBJ.z) < 2.8 && P.y < 2){
       if (OBJ.phase === 'goto') startStoreCut();
-      else if (OBJ.phase === 'open'){ beacon.visible = false; saveProgress(); startStore(); }   // chapter 2: inside MOO-MART
+      else if (OBJ.phase === 'open') startEnterStore();   // chapter 2: walk in, door animation, fade, inside MOO-MART
     }
   }
   updateCamera(dt, real);
@@ -962,6 +989,7 @@ function drawSword(g, hx, hy, a){
 }
 function drawViewmodel(){
   if (P.mant) return;
+  if (OBJ.phase === 'cut' || OBJ.phase === 'enter'){ drawDoorHand(vctx); return; }
   const pose = swordPose(), g = vctx;
   g.save();
   const tip = drawSword(g, pose.x, pose.y, pose.a);
@@ -1252,7 +1280,7 @@ function debugActions(){
     } else if (OBJ.phase === 'survive' || OBJ.phase === 'endless'){
       for (const e of enemies.slice()) removeEnemy(e); Wave.queue.length = 0; Wave.bossT = -1;
       if (Wave.state === 'break') Wave.breakT = 0.1; dbgNote('WAVE ' + Wave.n + ' SKIPPED');
-    } else if (OBJ.phase === 'open'){ startStore(); dbgNote('ENTERED THE STORE'); }
+    } else if (OBJ.phase === 'open'){ startEnterStore(); dbgNote('ENTERING THE STORE'); }
     else dbgNote('NOTHING TO SKIP HERE');
   }
   if (k(7)){ for (const n of treeNodes()) prog.ranks[n.id] = n.max; applyStats(); saveProgress(); dbgNote('ALL SKILLS MAXED'); }
@@ -1307,6 +1335,14 @@ function idleCamera(real){
     for (const e of enemies.slice()) removeEnemy(e);
   }
 }
+/* screen fade (black), drawn over everything; fadeTo(1, dur, cb) fades out then calls cb once */
+const FADE = { a:0, target:0, speed:1, cb:null };
+function fadeTo(target, dur, cb){ FADE.target = target; FADE.speed = 1/Math.max(0.05, dur); FADE.cb = cb || null; }
+function updateFade(dt){
+  if (FADE.a === FADE.target) return;
+  FADE.a += Math.sign(FADE.target-FADE.a)*Math.min(Math.abs(FADE.target-FADE.a), FADE.speed*dt);
+  if (FADE.a === FADE.target && FADE.cb){ const cb = FADE.cb; FADE.cb = null; cb(); }
+}
 let lastT = performance.now();
 function frame(now){ try { tick(now); } catch(e){ console.error(e); } requestAnimationFrame(frame); }   // an error in one frame must never kill the loop (that was the "freeze")
 function tick(now){
@@ -1331,8 +1367,10 @@ function tick(now){
       if (state === 'dead') deadT += real;
     }
   }
+  updateFade(Math.min(0.1, Math.max(0, raw)));
   for (const e of enemies) syncEnemy(e);
   render(now);
+  if (FADE.a > 0.003){ dctx.globalAlpha = FADE.a; dctx.fillStyle = '#000'; dctx.fillRect(0, 0, DW, DH); dctx.globalAlpha = 1; }
   if (DBG.on){ DBG.ms += (performance.now()-t0 - DBG.ms)*0.1; drawDebug(); }
   for (const k in pressed) delete pressed[k];
 }
