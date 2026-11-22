@@ -29,6 +29,7 @@ First-person hack & slash (three.js, plain HTML/JS, optional Electron portable e
 
 - **Pan-out camera (flip, ground slam, whirlwind):** `panCam()` in `game.js`. The first-person camera no longer spins for flips or the whirlwind; it eases out to
   show you tumbling (flip), diving head-first (slam) or spinning (whirl: front/edge/back squash), then back into the head. Details below.
+- **Front/back flips** are seen from behind and tip end over end (foreshortens, shows the front upside-down, comes round); side flips still roll in the screen plane.
 - **Flip camera:** wall flips no longer spin the first-person camera. The camera eases out to a side (front/back flips) or behind (side flips) view, the
   character is drawn as a billboard tumbling in the screen plane, then it eases back into the head. Falls back to a closer/other angle in tight spots and
   stays first person when there is no room (`flipCam()` in `game.js`). The tumbling sprite only uses the `stand` pose for now.

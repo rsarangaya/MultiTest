@@ -436,8 +436,8 @@ function panCam(real){
   const slamT = (P.slamming || FLIP.hold > 0) ? 1 : 0;
   FLIP.s += (slamT - FLIP.s)*Math.min(1, real*(slamT ? 14 : 7)); FLIP.rot += ((P.slamming ? Math.PI : 0) - FLIP.rot)*Math.min(1, real*14);
   const env = k => { const r = Math.min(1, k/0.2, (1-k)/0.2); return r*r*(3-2*r); };
-  let mode, pull0, side, mv = null, rotA = 0, turn = 0;
-  if (P.flip){ const f = P.flip, k = Math.min(1, f.t/f.dur), e = k < 0.5 ? 2*k*k : 1-Math.pow(-2*k+2,2)/2; mode = 'flip'; pull0 = env(k); side = f.dir === 'front' || f.dir === 'back'; rotA = Math.PI*2*e; mv = f.dir; }
+  let mode, pull0, side, mv = null, rotA = 0, turn = 0, somer = false;
+  if (P.flip){ const f = P.flip, k = Math.min(1, f.t/f.dur), e = k < 0.5 ? 2*k*k : 1-Math.pow(-2*k+2,2)/2; mode = 'flip'; pull0 = env(k); side = false; somer = f.dir === 'front' || f.dir === 'back'; rotA = Math.PI*2*e; mv = f.dir; }
   else if (atk.state === 'whirl'){ const k = Math.min(1, atk.t/0.5); mode = 'whirl'; pull0 = env(k); side = false; turn = Math.PI*2*(1-Math.pow(1-k,2)); }
   else if (FLIP.s > 0.02){ mode = 'slam'; pull0 = FLIP.s; side = true; rotA = FLIP.rot; mv = 'front'; }
   else return;
@@ -454,12 +454,17 @@ function panCam(real){
   if (!FLIP.sprite){ FLIP.sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map:null, transparent:true, alphaTest:0.4 })); fx.add(FLIP.sprite); }
   const Hh = 1.8*78/64, W = Hh*42/78, fromBehind = (best[0]*B[0] + best[1]*B[1]) > 0.5, sp = FLIP.sprite;
   let back = fromBehind, sx = 1;
+  let sy2 = 1, rotFix = 0, lift = 0;
   if (mode === 'whirl'){ const c = Math.cos(turn); back = c > 0; sx = Math.max(0.12, Math.abs(c)); }       // spinning on the spot: front, edge-on, back...
-  sp.material.map = flipTex(back); sp.scale.set(W*sx, Hh, 1); sp.position.set(tx, ty, tz); sp.material.needsUpdate = true;
+  else if (somer){                                                                                      // front/back somersault seen from behind: the body tips end over end,
+    const c = Math.cos(rotA); back = c > 0; sy2 = Math.max(0.2, Math.abs(c)); rotFix = c > 0 ? 0 : Math.PI;   // so it foreshortens, shows the other side upside-down, and comes round again
+    sx = 0.9 + 0.1*Math.abs(c); lift = Math.sin(rotA)*0.45*(mv === 'front' ? 1 : -1);
+  }
+  sp.material.map = flipTex(back); sp.scale.set(W*sx, Hh*sy2, 1); sp.position.set(tx, ty + lift, tz); sp.material.needsUpdate = true;
   let cw = true;
   if (mv){ const F = mv === 'front' ? [-sy,-cy] : mv === 'back' ? [sy,cy] : mv === 'right' ? R : [-R[0],-R[1]], L = Math.hypot(best[0], best[1]) || 1;
     cw = (F[0]*best[1]/L - F[1]*best[0]/L) >= 0; }                                                     // does your travel direction appear screen-right?
-  sp.material.rotation = mode === 'slam' ? rotA : (cw ? -rotA : rotA);
+  sp.material.rotation = mode === 'slam' ? rotA : somer ? rotFix : (cw ? -rotA : rotA);
   sp.material.opacity = Math.max(0, Math.min(1, (pull-0.3)/0.4));                                      // fades in once the camera has moved away from your head
 }
 
