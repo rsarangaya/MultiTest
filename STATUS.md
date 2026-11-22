@@ -27,6 +27,10 @@ First-person hack & slash (three.js, plain HTML/JS, optional Electron portable e
 - **Mobile (testing build):** taps act as clicks; the intro and all menus are playable on a phone (on-screen WASD, OK, FAST, SKIP, TAB buttons; name entry
   via the system prompt). Street and store have no touch controls yet (a MENU button is shown). Touch code is in `game.js` (`IS_TOUCH`, `drawTouchUI`).
 
+- **Flip camera:** wall flips no longer spin the first-person camera. The camera eases out to a side (front/back flips) or behind (side flips) view, the
+  character is drawn as a billboard tumbling in the screen plane, then it eases back into the head. Falls back to a closer/other angle in tight spots and
+  stays first person when there is no room (`flipCam()` in `game.js`). The tumbling sprite only uses the `stand` pose for now.
+
 ## Verified (scripted, in the preview browser)
 - Same walk distance at 30/60/144/240 Hz; intro clock = real time at every rate.
 - 40 s of simulated play with spawns, god mode, boss, attacks: no console errors; about 1.3 ms CPU per frame.
