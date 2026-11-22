@@ -174,7 +174,11 @@ function startIntro(){
   IN.card = { page:0, t:0 }; panelCanvas(0);
   state = 'card'; setMood(false); for (const k in keys) keys[k] = false;
 }
-function finishIntro(){ saveChar(); IN.on = false; IN.card = null; beginGame(null); }          // out the door -> the street (game.js plays the arrival shot)
+function finishIntro(){
+  saveChar(); IN.on = false; IN.card = null;
+  if (IS_TOUCH){ state = 'menu'; menuIdx = 0; FADE.a = 1; fadeTo(0, 0.9); return; }      // phones: the street has no touch controls yet, so the intro ends back at the title
+  beginGame(null);
+}          // out the door -> the street (game.js plays the arrival shot)
 function skipIntro(){ IN.dlg = null; IN.creator = false; IN.weaponUI = false; IN.nameMode = false; CHAR.weapon = 'sword'; finishIntro(); }
 function saveChar(){ try { localStorage.setItem('deadend_char', JSON.stringify(CHAR)); } catch(e){} }
 function loadChar(){ try { const c = JSON.parse(localStorage.getItem('deadend_char')); if (c) Object.assign(CHAR, CHAR_DEFAULT, c); } catch(e){} }   // defaults first, so older saves get the newer fields
