@@ -51,6 +51,7 @@ const locked = () => document.pointerLockElement === disp;
 function lockPointer(){ try { const r = disp.requestPointerLock(); if (r && r.catch) r.catch(()=>{}); } catch(e){} }
 
 addEventListener('keydown', e => {
+  if (e.target && e.target.id === 'nm'){ if (e.key === 'Enter'){ e.preventDefault(); nameDoneTouch(); } return; }      // typing in the mobile name box
   if (e.code === 'Backquote' && !capture && !(IN.on && IN.nameMode)){ e.preventDefault(); DBG.on = !DBG.on; return; }
   if (!Music.on) startMusic();
   if (typeof introKey === 'function' && introKey(e)) return;
@@ -82,15 +83,28 @@ const TB_DPAD = [ { k:'KeyW', x:59, y:361, w:50, h:50, t:'^' }, { k:'KeyS', x:59
 const TB_INTRO = TB_DPAD.concat([ { k:'Enter', x:840, y:420, w:100, h:56, t:'OK' }, { k:'KeyF', x:840, y:360, w:100, h:50, t:'FAST >>' }, { k:'Escape', x:840, y:300, w:100, h:50, t:'SKIP' } ]);
 const TB_TAB = { k:'Tab', x:724, y:420, w:100, h:56, t:'TAB' }, TB_MENU = [ { k:'Escape', x:840, y:16, w:100, h:44, t:'MENU' } ];
 function tbActive(){
-  if (state === 'intro' || state === 'card') return IN.nameMode ? [] : IN.creator ? TB_INTRO.concat([TB_TAB]) : TB_INTRO;
+  if (state === 'intro' || state === 'card') return IN.nameMode ? [NAME_DONE] : IN.creator ? TB_INTRO.concat([TB_TAB]) : TB_INTRO;
   if (state === 'play' || state === 'store') return (state === 'play' && OBJ.phase === 'arrive') ? [] : TB_MENU;
   return [];
 }
 function touchStartMusic(){ if (!Music.on) startMusic(); }
+/* mobile name entry: a real <input> sits over the canvas name field (tapping it opens the phone keyboard) + a DONE button */
+const nmEl = document.getElementById('nm'), NAME_DONE = { k:'NameDone', x:400, y:366, w:160, h:54, t:'DONE' };
+function nameDoneTouch(){ IN.nameBuf = nmEl.value.replace(/[^A-Za-z0-9 '\-]/g, '').slice(0, 12); IN.nameDone = true; nmEl.blur(); }
+nmEl.addEventListener('input', () => { const v = nmEl.value.replace(/[^A-Za-z0-9 '\-]/g, '').slice(0, 12); if (v !== nmEl.value) nmEl.value = v; IN.nameBuf = v; });
+function syncNameBox(){
+  const on = IS_TOUCH && state === 'intro' && IN.on && IN.nameMode;
+  if (!on){ if (nmEl.style.display !== 'none'){ nmEl.style.display = 'none'; nmEl.blur(); } return; }
+  const r = disp.getBoundingClientRect(), sc = r.width/DW;
+  if (nmEl.style.display === 'none'){ nmEl.style.display = 'block'; nmEl.value = ''; }
+  nmEl.style.left = (r.left + 263*sc) + 'px'; nmEl.style.top = (r.top + 259*sc) + 'px'; nmEl.style.width = (434*sc) + 'px'; nmEl.style.height = (40*sc) + 'px';
+  nmEl.style.fontSize = Math.max(16, 26*sc) + 'px';
+}
 disp.addEventListener('touchstart', e => {
   e.preventDefault(); IS_TOUCH = true; touchStartMusic();
   for (const t of e.changedTouches){
     mpos(t); const b = tbActive().find(b => mouse.x >= b.x && mouse.x <= b.x+b.w && mouse.y >= b.y && mouse.y <= b.y+b.h);
+    if (b === NAME_DONE){ nameDoneTouch(); continue; }
     if (b){ touchHeld[t.identifier] = b.k; if (!keys[b.k]) pressed[b.k] = true; keys[b.k] = true; continue; }
     if (state === 'intro' || state === 'card') introMouse();
     else if (state === 'store' ? !!ST.battle : state !== 'play') clickUI();
@@ -99,6 +113,7 @@ disp.addEventListener('touchstart', e => {
 const touchEnd = e => { e.preventDefault(); touchStartMusic(); for (const t of e.changedTouches){ const k = touchHeld[t.identifier]; if (k){ keys[k] = false; delete touchHeld[t.identifier]; } } };
 disp.addEventListener('touchend', touchEnd, { passive:false }); disp.addEventListener('touchcancel', touchEnd, { passive:false });
 function drawTouchUI(){
+  syncNameBox();
   if (!IS_TOUCH) return;
   const list = tbActive(); dctx.save(); dctx.font = 'bold 18px "Courier New",monospace'; dctx.textAlign = 'center';
   for (const b of list){

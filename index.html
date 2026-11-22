@@ -15,6 +15,7 @@
 <body>
 <div id="rot">ROTATE YOUR PHONE SIDEWAYS (landscape)</div>
 <canvas id="c" width="960" height="540"></canvas>
+<input id="nm" type="text" maxlength="12" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" enterkeyhint="done" placeholder="NAME" style="display:none;position:fixed;z-index:3;box-sizing:border-box;border:0;outline:0;margin:0;padding:0 8px;text-align:center;background:#1f1018;color:#efe3cf;font-family:'Courier New',monospace;font-weight:bold;border-radius:0">
 <!-- load order matters: three.js -> art (palettes/textures) -> sprites -> world (level) -> game (logic/menus) -> intro (cutscene) -->
 <script src="three.min.js"></script>
 <script src="art.js"></script>

@@ -245,12 +245,7 @@ function introUpdate(dt){
 }
 function introMouse(){
   for (const r of IN.ui) if (mouse.x>=r.x && mouse.x<=r.x+r.w && mouse.y>=r.y && mouse.y<=r.y+r.h){ r.act(); return; }
-  if (IN.nameMode && IS_TOUCH){ setTimeout(askName, 0); return; }      // no keyboard on a phone: use the system prompt
   IN.click = true;
-}
-function askName(){
-  const v = prompt('Your name is...', IN.nameBuf || ''); if (v === null) return;
-  IN.nameBuf = v.replace(/[^A-Za-z0-9 '\-]/g, '').slice(0, 12); IN.nameDone = true;
 }
 function introKey(e){
   if (!IN.on || !IN.nameMode) return false;
@@ -647,7 +642,7 @@ function drawIntroHUD(){
     HT('YOUR NAME IS...', DW/2, y+44, 24, '#ffe14a', 'center');
     HR(x+30,y+66,w-60,46,NAVY); HR(x+33,y+69,w-66,40,'#1f1018');
     HT(IN.nameBuf + (Math.floor(performance.now()/400)%2 ? '_' : ' '), DW/2, y+99, 28, '#efe3cf', 'center');
-    HT(IS_TOUCH ? 'TAP TO TYPE YOUR NAME' : 'Type a name  -  ENTER to confirm', DW/2, y+140, 14, '#a3aab8', 'center');
+    HT(IS_TOUCH ? 'TAP THE BOX, TYPE, THEN DONE' : 'Type a name  -  ENTER to confirm', DW/2, y+140, 14, '#a3aab8', 'center');
   }
   if (IN.cur && IN.cur.hub && !IN.dlg){
     const b = [IN.walletTaken ? 'WALLET: GOT IT' : 'WALLET: ?', IN.weaponTaken ? 'WEAPON: GOT IT' : 'WEAPON: ?'];
