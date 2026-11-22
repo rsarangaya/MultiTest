@@ -74,6 +74,43 @@ disp.addEventListener('mousedown', e => {
   clickUI();
 });
 addEventListener('mouseup', e => { keys['Mouse'+e.button] = false; });
+/* ---- touch (testing build: the intro + all menus are playable; the street and store have no touch controls yet) ----
+   A tap acts like a click. On-screen buttons (drawn on the canvas) stand in for the keys the intro uses: WASD, Enter, hold-F fast-forward, Esc skip. */
+let IS_TOUCH = !!(window.matchMedia && matchMedia('(pointer:coarse)').matches);
+const touchHeld = {};
+const TB_DPAD = [ { k:'KeyW', x:59, y:361, w:50, h:50, t:'^' }, { k:'KeyS', x:59, y:469, w:50, h:50, t:'v' }, { k:'KeyA', x:5, y:415, w:50, h:50, t:'<' }, { k:'KeyD', x:113, y:415, w:50, h:50, t:'>' } ];
+const TB_INTRO = TB_DPAD.concat([ { k:'Enter', x:840, y:420, w:100, h:56, t:'OK' }, { k:'KeyF', x:840, y:360, w:100, h:50, t:'FAST >>' }, { k:'Escape', x:840, y:300, w:100, h:50, t:'SKIP' } ]);
+const TB_TAB = { k:'Tab', x:724, y:420, w:100, h:56, t:'TAB' }, TB_MENU = [ { k:'Escape', x:840, y:16, w:100, h:44, t:'MENU' } ];
+function tbActive(){
+  if (state === 'intro' || state === 'card') return IN.nameMode ? [] : IN.creator ? TB_INTRO.concat([TB_TAB]) : TB_INTRO;
+  if (state === 'play' || state === 'store') return (state === 'play' && OBJ.phase === 'arrive') ? [] : TB_MENU;
+  return [];
+}
+function touchStartMusic(){ if (!Music.on) startMusic(); }
+disp.addEventListener('touchstart', e => {
+  e.preventDefault(); IS_TOUCH = true; touchStartMusic();
+  for (const t of e.changedTouches){
+    mpos(t); const b = tbActive().find(b => mouse.x >= b.x && mouse.x <= b.x+b.w && mouse.y >= b.y && mouse.y <= b.y+b.h);
+    if (b){ touchHeld[t.identifier] = b.k; if (!keys[b.k]) pressed[b.k] = true; keys[b.k] = true; continue; }
+    if (state === 'intro' || state === 'card') introMouse();
+    else if (state === 'store' ? !!ST.battle : state !== 'play') clickUI();
+  }
+}, { passive:false });
+const touchEnd = e => { e.preventDefault(); touchStartMusic(); for (const t of e.changedTouches){ const k = touchHeld[t.identifier]; if (k){ keys[k] = false; delete touchHeld[t.identifier]; } } };
+disp.addEventListener('touchend', touchEnd, { passive:false }); disp.addEventListener('touchcancel', touchEnd, { passive:false });
+function drawTouchUI(){
+  if (!IS_TOUCH) return;
+  const list = tbActive(); dctx.save(); dctx.font = 'bold 18px "Courier New",monospace'; dctx.textAlign = 'center';
+  for (const b of list){
+    const on = keys[b.k]; dctx.globalAlpha = on ? 0.8 : 0.45; dctx.fillStyle = on ? '#ffe14a' : '#2c3142'; dctx.fillRect(b.x, b.y, b.w, b.h);
+    dctx.globalAlpha = 0.9; dctx.strokeStyle = '#efe3cf'; dctx.lineWidth = 2; dctx.strokeRect(b.x+1, b.y+1, b.w-2, b.h-2); dctx.fillStyle = on ? '#1b1f2e' : '#efe3cf'; dctx.fillText(b.t, b.x+b.w/2, b.y+b.h/2+6);
+  }
+  if ((state === 'play' || state === 'store') && !(state === 'play' && OBJ.phase === 'arrive')){
+    dctx.globalAlpha = 0.85; dctx.fillStyle = 'rgba(18,10,16,.85)'; dctx.fillRect(DW/2-250, DH-44, 500, 30); dctx.fillStyle = '#ffe14a'; dctx.font = '14px "Courier New",monospace';
+    dctx.fillText('TOUCH BUILD: only the intro and menus work on mobile (tap MENU)', DW/2, DH-24);
+  }
+  dctx.restore();
+}
 document.addEventListener('mousemove', e => {
   if (state !== 'play' || !locked()) return;
   const s = 0.0022*settings.sens;
@@ -1369,7 +1406,7 @@ function tick(now){
   }
   updateFade(Math.min(0.1, Math.max(0, raw)));
   for (const e of enemies) syncEnemy(e);
-  render(now);
+  render(now); drawTouchUI();
   if (FADE.a > 0.003){ dctx.globalAlpha = FADE.a; dctx.fillStyle = '#000'; dctx.fillRect(0, 0, DW, DH); dctx.globalAlpha = 1; }
   if (DBG.on){ DBG.ms += (performance.now()-t0 - DBG.ms)*0.1; drawDebug(); }
   for (const k in pressed) delete pressed[k];

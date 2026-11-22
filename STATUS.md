@@ -24,6 +24,9 @@ First-person hack & slash (three.js, plain HTML/JS, optional Electron portable e
 - **Store difficulty:** map is 16x11 (was 14x10), 5 patrolling guards (faster, longer/wider vision, quicker suspicion, wider look sweeps), recruiter
   battle HP 30 (was 14) and harder hits. Cashier + gag recruiter live in the bottom-left corner, no patrol route goes near it.
 
+- **Mobile (testing build):** taps act as clicks; the intro and all menus are playable on a phone (on-screen WASD, OK, FAST, SKIP, TAB buttons; name entry
+  via the system prompt). Street and store have no touch controls yet (a MENU button is shown). Touch code is in `game.js` (`IS_TOUCH`, `drawTouchUI`).
+
 ## Verified (scripted, in the preview browser)
 - Same walk distance at 30/60/144/240 Hz; intro clock = real time at every rate.
 - 40 s of simulated play with spawns, god mode, boss, attacks: no console errors; about 1.3 ms CPU per frame.
