@@ -421,29 +421,46 @@ function updateCamera(dt, real){
   const sh = G.shake*0.12, ox = (Math.random()-0.5)*sh, oy = (Math.random()-0.5)*sh;
   camera.position.set(P.x+ox, P.y + P.eye + bob - P.landDip + oy, P.z);
   camera.rotation.set(P.pitch, P.yaw+P.spin, P.roll);
-  camPull = 0; if (P.flip) flipCam();                                          // flips: the camera pans out to show you flipping (no more camera spin)
+  camPull = 0; panCam(real);                                                  // flips, ground slam, whirlwind: the camera pans out to show you doing it
 }
-/* flip camera: ease out of the head to a spot beside (front/back flips: profile) or behind (side flips) the player, look at them, ease back in.
-   The player is drawn as a billboard that spins in the screen plane; the spot is pulled in if a wall is in the way. */
-let camPull = 0; const FLIP = { sprite:null, key:'', tex:{}, rig:new THREE.PerspectiveCamera() };
-function flipCam(){
-  const f = P.flip, k = Math.min(1, f.t/f.dur), e = k < 0.5 ? 2*k*k : 1-Math.pow(-2*k+2,2)/2, a = Math.PI*2*e, d = f.dir;
-  const r = Math.min(1, k/0.2, (1-k)/0.2), side = d === 'front' || d === 'back';
+/* pan-out camera for the big moves: wall flip (you tumble), ground slam (you dive head-first), whirlwind (you spin). The camera eases out of your head
+   to a spot beside (profile) or behind you, looks at you, then eases back. You are drawn as a billboard (screen-plane rotation for flips and the dive,
+   a squash-flip for the whirl). It tries other angles in tight spots and stays first person when there is no room. */
+let camPull = 0; const FLIP = { sprite:null, tex:{}, texKey:'', rig:new THREE.PerspectiveCamera(), s:0, hold:0, rot:0 };
+function flipTex(back){
+  const key = JSON.stringify(CHAR); if (FLIP.texKey !== key){ for (const t in FLIP.tex) FLIP.tex[t].dispose(); FLIP.tex = {}; FLIP.texKey = key; }
+  return FLIP.tex[back ? 'b' : 'f'] || (FLIP.tex[back ? 'b' : 'f'] = makeTex(personCanvas(CHAR, 'stand', back), false));
+}
+function panCam(real){
+  if (P.slamming) FLIP.hold = 0.4; else FLIP.hold = Math.max(0, FLIP.hold - real);
+  const slamT = (P.slamming || FLIP.hold > 0) ? 1 : 0;
+  FLIP.s += (slamT - FLIP.s)*Math.min(1, real*(slamT ? 14 : 7)); FLIP.rot += ((P.slamming ? Math.PI : 0) - FLIP.rot)*Math.min(1, real*14);
+  const env = k => { const r = Math.min(1, k/0.2, (1-k)/0.2); return r*r*(3-2*r); };
+  let mode, pull0, side, mv = null, rotA = 0, turn = 0;
+  if (P.flip){ const f = P.flip, k = Math.min(1, f.t/f.dur), e = k < 0.5 ? 2*k*k : 1-Math.pow(-2*k+2,2)/2; mode = 'flip'; pull0 = env(k); side = f.dir === 'front' || f.dir === 'back'; rotA = Math.PI*2*e; mv = f.dir; }
+  else if (atk.state === 'whirl'){ const k = Math.min(1, atk.t/0.5); mode = 'whirl'; pull0 = env(k); side = false; turn = Math.PI*2*(1-Math.pow(1-k,2)); }
+  else if (FLIP.s > 0.02){ mode = 'slam'; pull0 = FLIP.s; side = true; rotA = FLIP.rot; mv = 'front'; }
+  else return;
   const sy = Math.sin(P.yaw), cy = Math.cos(P.yaw), B = [sy, cy], R = [cy, -sy], H = Math.SQRT1_2;       // behind / player's right
   const tx = P.x, ty = P.y + 0.9, tz = P.z;
   const cands = side ? [R, [-R[0],-R[1]], [(B[0]+R[0])*H,(B[1]+R[1])*H], [(B[0]-R[0])*H,(B[1]-R[1])*H], B]       // profile view first
                      : [B, [(B[0]+R[0])*H,(B[1]+R[1])*H], [(B[0]-R[0])*H,(B[1]-R[1])*H], R, [-R[0],-R[1]]];    // behind view first
   let best = cands[0], D = -1;                                                                         // the first direction with room (>= 2.5), else the roomiest
   for (const c of cands){ let m = 0; for (let s = 0.5; s <= 4.5; s += 0.5){ if (collides(tx+c[0]*s, ty+0.35, tz+c[1]*s, 0.5)) break; m = s; } if (m > D){ D = m; best = c; } if (m >= 2.5) break; }
-  const pull0 = r*r*(3-2*r), pull = pull0 * Math.max(0, Math.min(1, (D-1.4)/1.1));                       // tight spot (< 1.5 m of room) -> stay in first person
+  const pull = pull0 * Math.max(0, Math.min(1, (D-1.4)/1.1));                                          // tight spot (< 1.5 m of room) -> stay in first person
+  if (mode === 'whirl' && pull > 0.02) camera.rotation.set(P.pitch, P.yaw, P.roll);                    // the camera itself no longer spins
   FLIP.rig.position.set(tx+best[0]*D, ty+0.6, tz+best[1]*D); FLIP.rig.lookAt(tx, ty, tz);
   camera.position.lerp(FLIP.rig.position, pull); camera.quaternion.slerp(FLIP.rig.quaternion, pull); camPull = pull;
-  if (!FLIP.sprite){ FLIP.sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map:null, transparent:true, alphaTest:0.4 })); const Hh = 1.8*78/64; FLIP.sprite.scale.set(Hh*42/78, Hh, 1); fx.add(FLIP.sprite); }
-  const fromBehind = (best[0]*B[0] + best[1]*B[1]) > 0.5, key = (fromBehind ? 'b' : 'f') + JSON.stringify(CHAR);
-  if (FLIP.key !== key){ FLIP.key = key; FLIP.sprite.material.map = makeTex(personCanvas(CHAR, 'stand', fromBehind), false); FLIP.sprite.material.needsUpdate = true; }
-  const mv = d === 'front' ? [-sy,-cy] : d === 'back' ? [sy,cy] : d === 'right' ? R : [-R[0],-R[1]];       // which way you travel, vs. screen-right of the pulled-out camera
-  const L = Math.hypot(best[0], best[1]) || 1, camRight = [best[1]/L, -best[0]/L], cw = (mv[0]*camRight[0] + mv[1]*camRight[1]) >= 0;
-  FLIP.sprite.position.set(tx, ty, tz); FLIP.sprite.material.rotation = cw ? -a : a; FLIP.sprite.material.opacity = Math.max(0, Math.min(1, (pull-0.3)/0.4));   // fades in once the camera has moved away from your head
+  if (!FLIP.sprite){ FLIP.sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map:null, transparent:true, alphaTest:0.4 })); fx.add(FLIP.sprite); }
+  const Hh = 1.8*78/64, W = Hh*42/78, fromBehind = (best[0]*B[0] + best[1]*B[1]) > 0.5, sp = FLIP.sprite;
+  let back = fromBehind, sx = 1;
+  if (mode === 'whirl'){ const c = Math.cos(turn); back = c > 0; sx = Math.max(0.12, Math.abs(c)); }       // spinning on the spot: front, edge-on, back...
+  sp.material.map = flipTex(back); sp.scale.set(W*sx, Hh, 1); sp.position.set(tx, ty, tz); sp.material.needsUpdate = true;
+  let cw = true;
+  if (mv){ const F = mv === 'front' ? [-sy,-cy] : mv === 'back' ? [sy,cy] : mv === 'right' ? R : [-R[0],-R[1]], L = Math.hypot(best[0], best[1]) || 1;
+    cw = (F[0]*best[1]/L - F[1]*best[0]/L) >= 0; }                                                     // does your travel direction appear screen-right?
+  sp.material.rotation = mode === 'slam' ? rotA : (cw ? -rotA : rotA);
+  sp.material.opacity = Math.max(0, Math.min(1, (pull-0.3)/0.4));                                      // fades in once the camera has moved away from your head
 }
 
 /* ============================ combat ============================ */
