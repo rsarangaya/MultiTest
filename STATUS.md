@@ -34,7 +34,8 @@ Beware: scripts share one global scope, so new helper names must not collide wit
 - **Station map** (`station.js`): lives at x = 500 (street is at the origin) so nothing overlaps; the hall is at z = -300. `beginStation()` -> `updateStation()` (spawner) ->
   `startPull()/updatePull()/drawTentacles()` -> `enterArena()` + `updateThrow()` -> `spawnCounselor()` / `updateCounselor()`.
 - **Ticket Inspector** (`kind:'inspector'`, chapter 2 elite recruiter, `paintInspectorRaw`): HP 16 (recruiter 6), ignores light hits (heavy swings, the launcher and parries still stagger him), long
-  readable windup then a wide baton sweep for 22 damage, 60% chance to drop coffee, 36 XP. Spawns on Station Road: ~6% at the start, ~22% near the station, at most 2-4 at once (`spawnRushEnemy`).
+  readable windup then a wide baton sweep for 22 damage, 60% chance to drop coffee, 36 XP. **Whistle:** every ~9-12 s (when he has recruiters within 15 m and you are > 5.5 m away) he raises his arm for 0.8 s, then every recruiter within 15 m is hurried
+  for 4.5 s (x1.5 speed, faster attacks, glows yellow). Stagger him during the windup (heavy swing, launcher, parry) to cancel it. Spawns on Station Road: ~6% at the start, ~22% near the station, at most 2-4 at once (`spawnRushEnemy`).
 - **Counselor** (`kind:'boss'`, `sub:'counselor'`, skin `counselor`): QUIZ (fan of answer sheets, deflectable), REVIEW (slow ground ring - jump it), RED PEN (three quick stabs),
   below 50% HP faster + double quiz; COFFEE BREAK every ~10 s drops a cup in the hall. HP 80. Parrying staggers him like the Hiring Manager.
 - **Movement = damage** (`momentumInfo()`, additive, capped at +150%, +10% per style rank): SPEED, CHARGE, PLUNGE, FLIP, WALL RUN, SLIDE, jump-pad LAUNCH, COMBO,

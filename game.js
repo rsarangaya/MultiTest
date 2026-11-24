@@ -671,10 +671,11 @@ function damageEnemy(e, dmg, dx, dz, knock){
     P.hp = Math.min(P.maxHp, P.hp + 2 + (styleRank() >= 3 ? 3 : 0)); gainXp(Math.round(ENEMY[e.kind].xp*(1+styleRank()*0.25)));
     if (P.dashCharges < 2) P.dashCharges++;                                // kills refund a dash: keep moving
     dropCoffee(e); burst(e.x, e.y+1, e.z, 16, 0xbcd6e8, 7);
-  } else { e.state = 'stagger'; e.stagger = knock > 10 ? 0.6 : 0.3; e.t = 0; e.vx = dx*knock; e.vz = dz*knock; e.hitDone = false; G.combo++; G.comboT = 3.2; }
+  } else { if (e.kind === 'inspector') e.whCd = Math.max(e.whCd || 0, 3.5); e.state = 'stagger'; e.stagger = knock > 10 ? 0.6 : 0.3; e.t = 0; e.vx = dx*knock; e.vz = dz*knock; e.hitDone = false; G.combo++; G.comboT = 3.2; }
 }
 function updateEnemy(e, dt){
   e.anim += dt; e.flash = Math.max(0, e.flash-dt); e.atkCd -= dt; updateBubble(e, dt);
+  if (e.haste > 0){ e.haste -= dt; e.atkCd -= dt*0.5; }                                             // hurried along by an Inspector's whistle
   if (e.kind === 'boss'){ if (e.state !== 'slam') slamRing.visible = false; if (e.state !== 'pull') grabLine.visible = false; }
   if (e.state === 'spawn'){ e.t += dt; if (e.t >= (e.kind === 'boss' ? 1.6 : 0.7)) e.state = 'chase'; return; }
   if (e.state === 'dying'){ const dur = e.kind === 'boss' ? 1.4 : 0.5; e.t += dt; if (e.y > 0){ e.vy = (e.vy||0) - 22*dt; e.y = Math.max(0, e.y + e.vy*dt); } moveEnemy(e, e.vx*dt, e.vz*dt); e.vx *= Math.pow(0.03,dt); e.vz *= Math.pow(0.03,dt); e.fade = Math.max(0, 1-e.t/dur); if (e.t > dur) removeEnemy(e); return; }
@@ -684,7 +685,7 @@ function updateEnemy(e, dt){
     return;
   }
   if (e.state === 'stagger'){ e.stagger -= dt; moveEnemy(e, e.vx*dt, e.vz*dt); e.vx *= Math.pow(0.02,dt); e.vz *= Math.pow(0.02,dt); if (e.stagger <= 0) e.state = 'chase'; return; }
-  const dx = P.x-e.x, dz = P.z-e.z, d = Math.hypot(dx,dz) || 1, nx = dx/d, nz = dz/d, sp = ENEMY[e.kind].speed, dy = Math.abs(P.y-e.y);
+  const dx = P.x-e.x, dz = P.z-e.z, d = Math.hypot(dx,dz) || 1, nx = dx/d, nz = dz/d, sp = ENEMY[e.kind].speed * (e.haste > 0 ? 1.5 : 1), dy = Math.abs(P.y-e.y);
   e.t += dt;
   if (e.kind === 'grunt'){
     if (e.state === 'chase'){ if (d > 0.95) moveEnemy(e, nx*sp*dt, nz*sp*dt); if (d < 2.3 && e.atkCd <= 0 && dy < 2.2){ e.state = 'windup'; e.t = 0; } }
@@ -698,8 +699,14 @@ function updateEnemy(e, dt){
       if (!e.hitDone && d < 1.9 && dy < 2.2){ e.hitDone = true; hurtPlayer(20, e.x, e.z, e); }
       if (e.t >= 0.3){ e.state = 'chase'; e.atkCd = 0.9; if (!e.hitDone && d < 3.6 && dy < 2.6 && evading()) closeCall(); }
     }
-  } else if (e.kind === 'inspector'){                                       // baton sweep: long, readable windup, then a wide arc in front of him
-    if (e.state === 'chase'){ if (d > 1.6) moveEnemy(e, nx*sp*dt, nz*sp*dt); if (d < 3.1 && e.atkCd <= 0 && dy < 2.2){ e.state = 'windup'; e.t = 0; e.lx = nx; e.lz = nz; showBubble(e, INSPECTOR_LINES[Math.floor(Math.random()*INSPECTOR_LINES.length)], 1.2); } }
+  } else if (e.kind === 'inspector'){                                       // baton sweep: long, readable windup, then a wide arc in front of him. His whistle hurries every recruiter near him (stagger him to cancel it).
+    e.whCd = e.whCd === undefined ? 3 + Math.random()*3 : e.whCd - dt;
+    if (e.state === 'chase' && e.whCd <= 0 && d > 5.5){ let allies = 0; for (const o of enemies) if (o !== e && o.state !== 'dying' && o.state !== 'spawn' && o.kind !== 'boss' && Math.hypot(o.x-e.x, o.z-e.z) < 15) allies++;
+      if (allies > 0){ e.state = 'whistle'; e.t = 0; showBubble(e, ['All aboard!', 'Move it, people!', 'Faster! Faster!'][Math.floor(Math.random()*3)], 1.3); } else e.whCd = 2; }
+    if (e.state === 'whistle'){ if (e.t >= 0.8){ tone('sine', 1700, 2500, 0.55, 0.16); G.shake = Math.max(G.shake, 0.08);
+        for (const o of enemies) if (o !== e && o.state !== 'dying' && o.kind !== 'boss' && Math.hypot(o.x-e.x, o.z-e.z) < 15){ o.haste = 4.5; burst(o.x, o.y+1.4, o.z, 5, 0xffe14a, 3); }
+        burst(e.x, e.y+2.2, e.z, 16, 0xffe14a, 7); e.state = 'chase'; e.whCd = 9 + Math.random()*3; } }
+    else if (e.state === 'chase'){ if (d > 1.6) moveEnemy(e, nx*sp*dt, nz*sp*dt); if (d < 3.1 && e.atkCd <= 0 && dy < 2.2){ e.state = 'windup'; e.t = 0; e.lx = nx; e.lz = nz; showBubble(e, INSPECTOR_LINES[Math.floor(Math.random()*INSPECTOR_LINES.length)], 1.2); } }
     else if (e.state === 'windup'){ e.lx = nx; e.lz = nz; if (e.t >= 0.6){ e.state = 'attack'; e.t = 0; e.hitDone = false; sfx.swing(); } }
     else if (e.state === 'attack'){
       moveEnemy(e, e.lx*3.5*dt, e.lz*3.5*dt);
@@ -731,7 +738,8 @@ function syncEnemy(e){
     st = (e.state === 'slam' || e.state === 'barrage' || (e.state === 'charge' && e.t < 0.55)) ? 'windup' : (e.state === 'grab' || e.state === 'pull' || e.state === 'smack' || e.state === 'charge') ? 'attack' : 'walk';
     if (st !== 'walk') fr = 0; }
   if (e.sub === 'counselor'){ st = (e.state === 'quiz' || e.state === 'review' || (e.state === 'jab' && e.t < 0.45)) ? 'windup' : e.state === 'jab' ? 'attack' : 'walk'; if (st !== 'walk') fr = 0; }
-  e.sprite.material.map = enemyTex(e.skin || e.kind, st, fr, e.flash > 0);
+  if (e.state === 'whistle') st = 'windup';                                                    // arm up, signalling
+  e.sprite.material.map = enemyTex(e.skin || e.kind, st, fr, e.flash > 0); e.sprite.material.color.setHex(e.haste > 0 ? 0xffe9a0 : 0xffffff);   // hurried recruiters glow yellow
   const S = e.state === 'spawn' ? Math.max(0.05, e.t/(e.kind === 'boss' ? 1.6 : 0.7)) : 1, H = e.h*S;
   e.sprite.scale.set(e.w*(e.state==='spawn'?Math.min(1,S*1.5):1), H, 1);
   e.sprite.position.set(e.x, e.y + H/2, e.z);
