@@ -308,33 +308,34 @@ function personCanvas(o, pose, back){
   return personCache[key] || (personCache[key] = outlined(paintPerson(o, pose, back)));
 }
 
-/* ---------- boss: the Career Counselor (chapter 2). Lavender alien, big round glasses, mustard cardigan, four arms: a clipboard and a very sharp red pencil ---------- */
+/* ---------- boss: the Career Counselor (chapter 2). Built like the other recruiters (egg head, big slanted black eyes, antennae with bulbs, suit, tie, lanyard + ID badge,
+   but pale lilac, with round glasses over the eyes, a clipboard and a very sharp red pencil ---------- */
 function paintCounselorRaw(state, frame){
   const c = mkCanvas(64,84), g = c.getContext('2d'), r = (x,y,w,h,col) => px(g,Math.round(x),Math.round(y),w,h,col);
-  const SK = '#9a8fc8', SK2 = '#6f649f', SK3 = '#b9b0dc', CARD = '#e0a050', CARD2 = '#b5803a', PANT = '#3f4658', ox = 8, oy = 4;
-  const s = state === 'walk' ? (frame ? 2 : -2) : 0;
-  r(ox+14+s,oy+60,8,15,PANT); r(ox+26-s,oy+60,8,15,PANT); r(ox+13+s,oy+74,10,4,NAVY); r(ox+25-s,oy+74,10,4,NAVY);                      // legs + shoes
-  r(ox+8,oy+30,32,32,CARD); r(ox+34,oy+30,6,32,CARD2); r(ox+8,oy+30,3,32,shade(CARD,1.15));                                            // cardigan
-  r(ox+20,oy+30,8,12,'#e8e6e0'); r(ox+19,oy+30,1,16,'#5f89ab'); r(ox+28,oy+30,1,16,'#5f89ab'); r(ox+21,oy+43,6,7,NAVY); r(ox+22,oy+44,4,5,'#e8e6e0'); r(ox+22,oy+44,4,1,'#5f89ab');   // collar, lanyard, badge
-  for (let i=0;i<3;i++) r(ox+23,oy+52+i*3,2,2,NAVY);                                                                                    // buttons
-  r(ox+3,oy+44,6,6,CARD2); r(ox+39,oy+44,6,6,CARD2);                                                                                    // elbow patches
-  // upper arms (clipboard side) + lower arms
-  if (state === 'windup'){                                                                                                              // clipboard raised overhead: "time for your review"
-    r(ox+3,oy+22,6,12,CARD); r(ox+39,oy+22,6,12,CARD); r(ox+2,oy+8,5,5,SK); r(ox+41,oy+8,5,5,SK); r(ox+3,oy+12,3,12,CARD); r(ox+42,oy+12,3,12,CARD);
-    r(ox+10,oy-2,28,18,NAVY); r(ox+12,oy,24,14,'#8f5a3a'); r(ox+14,oy+2,20,10,'#e8e6e0'); for (let i=0;i<3;i++) r(ox+16,oy+4+i*3,14,1,'#7d8597'); r(ox+30,oy+9,4,2,'#b5463f'); r(ox+20,oy-4,8,4,'#a3aab8');
-  } else if (state === 'attack'){                                                                                                       // jabbing the red pencil
-    r(ox+39,oy+34,7,6,CARD); r(ox+44,oy+34,6,5,SK); r(ox+46,oy+35,18,3,NAVY); r(ox+47,oy+35,16,2,'#ffe14a'); r(ox+60,oy+34,4,5,'#b5463f'); r(ox+62,oy+35,2,3,'#7a2a30');
-    r(ox+1,oy+32,7,24,CARD); r(ox+0,oy+54,7,5,SK); r(ox-4,oy+40,12,16,NAVY); r(ox-3,oy+41,10,14,'#8f5a3a'); r(ox-2,oy+43,8,10,'#e8e6e0');
-  } else {                                                                                                                              // clipboard held at the chest, pencil hand resting
-    r(ox+0,oy+34,9,22,CARD); r(ox+1,oy+54,8,5,SK); r(ox-4,oy+36,14,18,NAVY); r(ox-3,oy+37,12,16,'#8f5a3a'); r(ox-1,oy+39,8,12,'#e8e6e0'); for (let i=0;i<4;i++) r(ox,oy+41+i*3,6,1,'#7d8597'); r(ox+4,oy+49,2,2,'#b5463f');
-    r(ox+39,oy+32,7,26,CARD); r(ox+39,oy+56,7,5,SK); r(ox+41,oy+58,2,12,'#ffe14a'); r(ox+41,oy+69,2,3,'#b5463f');
-    r(ox+40,oy+44,5,9,CARD2);
+  const SK = '#c3b4e0', SK2 = '#9484bd', SK3 = '#ddd2f0', SU = '#4a3f66', SU2 = '#6b3a5c', ox = 8, oy = 4;
+  const s = state === 'walk' ? (frame ? 2 : -2) : 0, sw = frame ? 0.25 : -0.25;
+  const tent = (x0,y0,a0,curl,len,w0) => { let x = x0, y = y0, a = a0; for (let i=0;i<len;i++){ const w = Math.max(1, Math.round(w0*(1-i/len)+0.5)); r(x-w/2,y-w/2,w,w,i%2 ? SK : SK2); x += Math.cos(a); y += Math.sin(a); a += curl; } };
+  r(ox+14+s,oy+60,8,15,SU); r(ox+26-s,oy+60,8,15,SU); r(ox+13+s,oy+74,10,4,NAVY); r(ox+25-s,oy+74,10,4,NAVY);                              // legs + shoes
+  r(ox+8,oy+30,32,32,SU); r(ox+8,oy+30,3,32,SU2); r(ox+34,oy+30,6,32,shade(SU,.8));                                                       // suit jacket
+  r(ox+20,oy+30,8,12,'#e8e6e0'); r(ox+17,oy+30,3,14,SU2); r(ox+28,oy+30,3,14,SU2); r(ox+21,oy+30,6,3,'#7a3a10'); r(ox+22,oy+33,4,20,'#e0a050'); r(ox+23,oy+33,1,20,'#ffe14a');   // shirt + mustard tie
+  r(ox+19,oy+30,1,18,'#5f89ab'); r(ox+28,oy+30,1,18,'#5f89ab'); r(ox+30,oy+42,8,10,NAVY); r(ox+31,oy+43,6,8,'#e8e6e0'); r(ox+31,oy+43,6,2,'#5f89ab'); r(ox+32,oy+47,4,1,'#3f4658');   // lanyard + ID badge
+  if (state === 'windup'){                                                                                                                 // clipboard raised overhead: "time for your review"
+    r(ox+2,oy+32,7,18,SU); r(ox+39,oy+32,7,18,SU); r(ox+3,oy+16,5,18,SU); r(ox+40,oy+16,5,18,SU); r(ox+2,oy+11,6,6,SK); r(ox+40,oy+11,6,6,SK);
+    r(ox+9,oy-3,30,20,NAVY); r(ox+11,oy-1,26,16,'#8f5a3a'); r(ox+13,oy+1,22,12,'#e8e6e0'); for (let i=0;i<3;i++) r(ox+15,oy+3+i*3,14,1,'#7d8597'); r(ox+30,oy+10,4,2,'#b5463f'); r(ox+19,oy-5,10,4,'#a3aab8');
+  } else if (state === 'attack'){                                                                                                          // jabbing the red pencil
+    r(ox+39,oy+32,7,8,SU); r(ox+44,oy+33,6,6,SK); r(ox+46,oy+35,18,3,NAVY); r(ox+47,oy+35,16,2,'#ffe14a'); r(ox+60,oy+34,4,5,'#b5463f'); r(ox+62,oy+35,2,3,'#7a2a30');
+    r(ox+1,oy+32,7,24,SU); r(ox+1,oy+55,7,5,SK); r(ox-4,oy+40,12,16,NAVY); r(ox-3,oy+41,10,14,'#8f5a3a'); r(ox-2,oy+43,8,10,'#e8e6e0');
+  } else {                                                                                                                                 // clipboard held at the chest, pencil hand resting
+    r(ox+1,oy+32,7,24,SU); r(ox+1,oy+55,7,5,SK); r(ox-4,oy+36,14,18,NAVY); r(ox-3,oy+37,12,16,'#8f5a3a'); r(ox-1,oy+39,8,12,'#e8e6e0'); for (let i=0;i<4;i++) r(ox,oy+41+i*3,6,1,'#7d8597'); r(ox+4,oy+49,2,2,'#b5463f');
+    r(ox+39,oy+32,7,26,SU); r(ox+39,oy+56,7,5,SK); r(ox+41,oy+58,2,12,'#ffe14a'); r(ox+41,oy+69,2,3,'#b5463f');
   }
-  r(ox+19,oy+26,10,5,SK2);                                                                                                              // neck
-  for (let y=0;y<28;y++){ const t = y/27, hw = Math.max(3, Math.round(12*Math.sqrt(Math.max(0,1-((t-0.45)/0.6)**2)))); r(ox+24-hw,oy+y,hw*2,1,SK); r(ox+24+hw-3,oy+y,3,1,SK2); r(ox+24-hw,oy+y,2,1,SK3); }   // tall egg head
-  r(ox+13,oy+11,10,10,NAVY); r(ox+25,oy+11,10,10,NAVY); r(ox+14,oy+12,8,8,'#e8e6e0'); r(ox+26,oy+12,8,8,'#e8e6e0'); r(ox+23,oy+14,2,2,NAVY);   // big round glasses
-  r(ox+16+(state==='attack'?1:0),oy+14,4,4,NAVY); r(ox+28+(state==='attack'?1:0),oy+14,4,4,NAVY); r(ox+15,oy+13,2,2,'#fff'); r(ox+27,oy+13,2,2,'#fff');   // pupils + glare
-  r(ox+18,oy+22,12,1,SK2); if (state === 'windup' || state === 'attack') r(ox+20,oy+23,8,2,'#7a2a30'); else { r(ox+20,oy+22,8,1,NAVY); r(ox+19,oy+21,1,1,NAVY); r(ox+28,oy+21,1,1,NAVY); }   // smile (a very professional one)
-  r(ox+18,oy+1,2,5,SK2); r(ox+28,oy+1,2,5,SK2); r(ox+17,oy-2,4,3,'#3cff8a'); r(ox+27,oy-2,4,3,'#3cff8a');                                // antennae
+  r(ox+19,oy+26,10,5,SK2);                                                                                                                 // neck
+  for (let y=0;y<28;y++){ const t = y/27, hw = Math.max(3, Math.round(13*Math.sqrt(Math.max(0,1-((t-0.42)/0.62)**2)))); r(ox+24-hw,oy+y,hw*2,1,SK); r(ox+24+hw-4,oy+y,4,1,SK2); r(ox+24-hw,oy+y,2,1,SK3); }   // egg head
+  for (const [ex,ey,ew,eh] of [[13,11,5,3],[16,13,5,3],[19,15,3,2]]){ r(ox+ex,oy+ey,ew,eh,NAVY); r(ox+48-ex-ew,oy+ey,ew,eh,NAVY); }       // big slanted black eyes (like everyone else's)
+  r(ox+14,oy+11,1,1,'#fff'); r(ox+33,oy+11,1,1,'#fff');
+  for (const gx of [ox+10, ox+27]){ r(gx+1,oy+8,10,1,NAVY); r(gx+1,oy+19,10,1,NAVY); r(gx,oy+9,1,10,NAVY); r(gx+11,oy+9,1,10,NAVY); r(gx+2,oy+9,3,1,'#fff'); }   // round glasses (frames only, the eyes show through)
+  r(ox+22,oy+13,5,1,NAVY);                                                                                                                 // bridge
+  if (state === 'windup' || state === 'attack'){ r(ox+16,oy+22,16,5,'#7a2a30'); r(ox+16,oy+22,16,1,'#e8e6e0'); for (let x=ox+17;x<ox+31;x+=3) r(x,oy+26,1,1,'#e8e6e0'); } else r(ox+18,oy+23,12,1,NAVY);   // mouth
+  r(ox+17,oy+1,2,5,SK2); r(ox+29,oy+1,2,5,SK2); r(ox+16,oy-1,4,3,'#3cff8a'); r(ox+28,oy-1,4,3,'#3cff8a');                                  // antennae with bulbs
   return c;
 }
