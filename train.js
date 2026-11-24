@@ -6,12 +6,16 @@
    Low-res 480x270 like the iso scenes; the HUD is drawn at display res.  Enemies are the same recruiters, redrawn from the same sprites.
    ============================================================================ */
 const TRN = { floorY:236, carW:1300, W:LW };
-const TE = { grunt:{ hp:6, spd:62, dmg:10, xp:12 }, runner:{ hp:4, spd:70, dmg:12, xp:16 }, thrower:{ hp:4, spd:46, dmg:8, xp:18 }, inspector:{ hp:16, spd:44, dmg:16, xp:36 } };
+const TE = { grunt:{ hp:6, spd:62, dmg:10, xp:12 }, runner:{ hp:4, spd:70, dmg:12, xp:16 }, thrower:{ hp:4, spd:46, dmg:8, xp:18 }, inspector:{ hp:16, spd:44, dmg:16, xp:36 },
+  intern:{ hp:2, spd:96, dmg:5, xp:6 }, guard:{ hp:12, spd:50, dmg:14, xp:30 }, consultant:{ hp:70, spd:52, dmg:16, xp:220 } };
+const TSIZE = { grunt:1.1, runner:1.1, thrower:1.1, inspector:1.12, intern:0.86, guard:1.16, consultant:1.45 };
 const CARS = [
   { name:'CAR 1', waves:[ { x:260, e:['grunt','grunt','grunt'] }, { x:760, e:['grunt','grunt','runner','thrower'] } ] },
-  { name:'CAR 2', waves:[ { x:240, e:['grunt','runner','runner','thrower'] }, { x:700, e:['inspector','grunt','grunt'] }, { x:1000, e:['grunt','runner','thrower','thrower'] } ] },
-  { name:'CAR 3', waves:[ { x:260, e:['inspector','grunt','runner'] }, { x:720, e:['inspector','inspector','grunt','thrower'] }, { x:1050, e:['inspector','runner','runner','grunt','thrower'] } ] } ];
-const TR = { car:0, t:0, cam:0, lockCam:null, waveIdx:0, tp:null, es:[], pr:[], fx:[], nums:[], cof:[], stop:0, shake:0, rumble:0, leaving:false, over:false };
+  { name:'CAR 2', waves:[ { x:240, e:['grunt','runner','runner','thrower'] }, { x:700, e:['inspector','grunt','intern','intern','intern'] }, { x:1000, e:['grunt','runner','thrower','thrower'] } ] },
+  { name:'CAR 3', waves:[ { x:260, e:['guard','grunt','runner'] }, { x:720, e:['inspector','inspector','grunt','thrower'] }, { x:1050, e:['inspector','runner','runner','grunt','thrower'] } ] },
+  { name:'CAR 4', waves:[ { x:240, e:['guard','intern','intern','intern','intern'] }, { x:700, e:['guard','inspector','runner','thrower'] }, { x:1050, e:['intern','intern','intern','intern','intern','intern','guard','thrower'] } ] },
+  { name:'BOSS CAR', waves:[ { x:150, boss:true } ] } ];
+const TR = { car:0, t:0, cam:0, lockCam:null, arenaL:null, arenaR:null, arenaLt:0, arenaRt:0, says:[], waveIdx:0, tp:null, es:[], pr:[], fx:[], nums:[], cof:[], stop:0, shake:0, rumble:0, leaving:false, over:false };
 const trSprites = {};
 function trSprite(kind, state, frame, white){
   const key = kind+state+frame+(white ? 'w' : ''); if (trSprites[key]) return trSprites[key];
@@ -32,8 +36,14 @@ function startTrain(car){
   msg(CARS[TR.car].name + '  -  FIGHT YOUR WAY TO THE FRONT OF THE TRAIN', 3.0, '#ffe14a');
 }
 function trSetupCar(first){
-  TR.tp = trPlayerNew(70); TR.es = []; TR.pr = []; TR.fx = []; TR.nums = []; TR.cof = []; TR.cam = 0; TR.lockCam = null; TR.waveIdx = 0; TR.leaving = false; TR.stop = 0;
+  TR.tp = trPlayerNew(70); TR.es = []; TR.pr = []; TR.fx = []; TR.nums = []; TR.cof = []; TR.cam = 0; TR.lockCam = null; TR.waveIdx = 0; TR.leaving = false; TR.stop = 0; TR.arenaL = TR.arenaR = null; TR.says = [];
   TR.spawned = CARS[TR.car].waves.map(() => false); P.swUsed = false;
+}
+function trSay(e, text){ TR.says = TR.says.filter(s => s.e !== e); TR.says.push({ e, text, t:1.6 }); }
+function trSpawnBoss(){
+  TR.lockCam = TR.cam; TR.arenaL = TR.cam + 8; TR.arenaR = TR.cam + TRN.W - 8; TR.arenaLt = TR.arenaL; TR.arenaRt = TR.arenaR;
+  trSpawn('consultant', TR.arenaR - 60); const b = TR.es[TR.es.length-1]; b.hpMax = b.hp = 70; b.phase = 0; b.face = -1; b.cd = 1.4; b.st = 'walk'; b.shots = 0;
+  msg('BOSS:  THE EFFICIENCY CONSULTANT', 3.2, '#ff5a8a'); sfx.wave(); trSay(b, "We need to cut some costs. Starting with you.");
 }
 const trAlive = () => TR.es.filter(e => e.st !== 'dead').length;
 const trLocked = () => TR.lockCam !== null;
@@ -43,6 +53,7 @@ function trSpawn(kind, x){
   const sp = TE[kind]; TR.es.push({ kind, x, y:0, face: x < TR.tp.x ? 1 : -1, hp:sp.hp, hpMax:sp.hp, st:'walk', t:0, cd:0.6 + Math.random()*0.8, flash:0, hit:false, vx:0, vy:0, air:false, anim:Math.random()*3, fade:1, haste:0 });
 }
 function trSpawnWave(w){
+  if (w.boss){ trSpawnBoss(); return; }
   const cam = TR.cam; TR.lockCam = cam; let l = 0, r = 0;
   w.e.forEach((k, i) => { const left = (i % 2 === 0) && cam > 60; trSpawn(k, left ? cam - 28 - (l++)*26 : cam + TRN.W + 28 + (r++)*26); });
   msg('HERE THEY COME!', 1.2, '#ff5a4a'); sfx.wave();
@@ -64,13 +75,18 @@ function trHurtPlayer(dmg, fromX, e, heavy){
 }
 function trSpark(x, y, col, n){ for (let i=0;i<n;i++) TR.fx.push({ x, y, vx:(Math.random()-0.5)*220, vy:60+Math.random()*160, t:0, col }); }
 function trHitEnemy(e, dmg, knock, heavy){
-  const tp = TR.tp, mul = dmgMul()*(1 + Math.min(0.5, tp.combo*0.05))*(tp.y > 8 ? 1.25 : 1) * momentumTrain() * (e.air ? 1.5 : 1);
+  const tp = TR.tp;
+  if (e.kind === 'consultant' && (e.st === 'phase' || e.st === 'warp')){ trSpark(e.x, 50, '#8fb4d0', 4); return; }                          // invulnerable while he restructures
+  if (e.kind === 'guard' && !(e.broken > 0) && e.st !== 'stagger' && !heavy && tp.y <= 6 && e.face === (tp.x >= e.x ? 1 : -1)){                 // riot shield: light front hits just bounce off
+    e.vx += (e.x >= tp.x ? 1 : -1)*25; e.flash = 0.04; sfx.parry(); trSpark(e.x + e.face*14, 46, '#8fb4d0', 6); TR.nums.push({ x:e.x, y:84, v:'CLANG', t:0, c:'#8fb4d0' }); e.hp -= dmg*0.08*dmgMul(); tp.combo = 0; TR.stop = 0.03; return; }
+  if (e.kind === 'guard' && heavy && !(e.broken > 0)){ e.broken = 2.2; msg('GUARD BROKEN!', 0.7, '#ffe14a'); }
+  const mul = dmgMul()*(1 + Math.min(0.5, tp.combo*0.05))*(tp.y > 8 ? 1.25 : 1) * momentumTrain() * (e.air ? 1.5 : 1);
   dmg *= mul; e.hp -= dmg; e.flash = 0.09; trSpark(e.x, 50, '#efe3cf', 6); TR.nums.push({ x:e.x, y:76, v:Math.round(dmg*10), t:0, c: heavy ? '#ffe14a' : '#efe3cf' });
   tp.combo++; tp.comboT = 2.2; G.style = Math.min(100, G.style + 3); G.combo = tp.combo; G.comboT = 2.2;
   const dir = e.x >= tp.x ? 1 : -1;
-  if (e.hp <= 0){ e.st = 'dead'; e.t = 0; e.vx = dir*(knock + 60); G.kills++; gainXp(Math.round(TE[e.kind].xp*(1+styleRank()*0.25))); P.hp = Math.min(P.maxHp, P.hp + 2); if (Math.random() < (e.kind === 'inspector' ? 0.6 : 0.2)) TR.cof.push({ x:e.x, t:0 }); TR.stop = 0.07; TR.shake = 0.4; sfx.hit(); return; }
-  if (hasSkill('launcher') && (heavy || e.air)){ e.air = true; e.vy = e.y > 4 ? Math.max(e.vy, 190) : 330; e.vx = dir*(e.y > 4 ? 40 : 90); e.st = 'stagger'; e.t = 0; e.hit = false; if (!tp.air && tp.y <= 0 && !e.wasAir){ e.wasAir = true; msg('LAUNCH!', 0.6, '#ffe14a'); } TR.stop = 0.07; TR.shake = Math.max(TR.shake, 0.3); sfx.hit(); return; }   // LAUNCHER skill: heavy hits send them up; hit them again to juggle
-  if (e.kind === 'inspector' && !heavy){ e.vx += dir*30; sfx.hit(); TR.stop = 0.03; return; }                     // elite: light hits do not stagger him
+  if (e.hp <= 0){ if (e.kind === 'consultant') trBossDown(e); e.st = 'dead'; e.t = 0; e.vx = dir*(knock + 60); G.kills++; gainXp(Math.round(TE[e.kind].xp*(1+styleRank()*0.25))); P.hp = Math.min(P.maxHp, P.hp + 2); if (Math.random() < (e.kind === 'inspector' ? 0.6 : 0.2)) TR.cof.push({ x:e.x, t:0 }); TR.stop = 0.07; TR.shake = 0.4; sfx.hit(); return; }
+  if (hasSkill('launcher') && (heavy || e.air) && e.kind !== 'consultant'){ e.air = true; e.vy = e.y > 4 ? Math.max(e.vy, 190) : 330; e.vx = dir*(e.y > 4 ? 40 : 90); e.st = 'stagger'; e.t = 0; e.hit = false; if (!tp.air && tp.y <= 0 && !e.wasAir){ e.wasAir = true; msg('LAUNCH!', 0.6, '#ffe14a'); } TR.stop = 0.07; TR.shake = Math.max(TR.shake, 0.3); sfx.hit(); return; }   // LAUNCHER skill: heavy hits send them up; hit them again to juggle
+  if ((e.kind === 'inspector' || e.kind === 'consultant') && !heavy){ e.vx += dir*(e.kind === 'consultant' ? 12 : 30); sfx.hit(); TR.stop = 0.03; return; }                     // elite: light hits do not stagger him
   e.st = 'stagger'; e.t = 0; e.vx = dir*knock; e.hit = false; TR.stop = heavy ? 0.08 : 0.045; TR.shake = Math.max(TR.shake, heavy ? 0.4 : 0.15); sfx.hit();
 }
 const momentumTrain = () => 1 + 0.15*styleRank();                                                       // S-rank brawlers hit harder
@@ -79,16 +95,19 @@ function trUpdateEnemy(e, dt){
   e.anim += dt; e.flash = Math.max(0, e.flash - dt); e.cd -= dt; e.t += dt;
   if (e.air && e.st !== 'dead'){ e.vy -= 820*dt; e.y += e.vy*dt; e.x += e.vx*dt; e.vx *= Math.pow(0.3, dt); if (e.y <= 0){ e.y = 0; e.vy = 0; e.air = false; e.wasAir = false; e.st = 'stagger'; e.t = 0; e.vx = 0; trSpark(e.x, 4, '#e8e6e0', 5); } return; }
   if (e.st === 'dead'){ e.x += e.vx*dt; e.vx *= Math.pow(0.02, dt); e.fade = Math.max(0, 1 - e.t/0.7); return; }
-  if (e.st === 'stagger'){ e.x += e.vx*dt; e.vx *= Math.pow(0.03, dt); if (e.t >= (e.kind === 'inspector' ? 0.5 : 0.38)){ e.st = 'walk'; e.cd = Math.max(e.cd, 0.4); } return; }
+  if (e.st === 'stagger'){ e.x += e.vx*dt; e.vx *= Math.pow(0.03, dt); if (e.t >= (e.kind === 'inspector' || e.kind === 'consultant' ? 0.5 : 0.38)){ e.st = 'walk'; e.cd = Math.max(e.cd, 0.4); } return; }
+  if (e.broken > 0) e.broken -= dt;
+  if (e.kind === 'consultant'){ trUpdateConsultant(e, dt); if (TR.arenaL !== null) e.x = Math.max(TR.arenaL + 16, Math.min(TR.arenaR - 16, e.x)); return; }
   const spd = sp.spd*(e.haste > 0 ? 1.4 : 1);
   if (e.st === 'walk'){
     e.face = dir;
-    if (e.kind === 'grunt'){ if (d > 40) e.x += dir*spd*dt; else if (e.cd <= 0 && tp.y < 20){ e.st = 'windup'; e.t = 0; } }
+    if (e.kind === 'grunt' || e.kind === 'intern'){ if (d > (e.kind === 'intern' ? 32 : 40)) e.x += dir*spd*dt; else if (e.cd <= 0 && tp.y < 20){ e.st = 'windup'; e.t = 0; } }
+    else if (e.kind === 'guard'){ if (d > 48) e.x += dir*spd*dt; else if (e.cd <= 0 && tp.y < 20){ e.st = 'windup'; e.t = 0; } }
     else if (e.kind === 'runner'){ if (d > 150) e.x += dir*spd*dt; else if (e.cd <= 0){ e.st = 'windup'; e.t = 0; } else if (d < 60) e.x -= dir*spd*0.6*dt; }
     else if (e.kind === 'thrower'){ if (d < 120) e.x -= dir*spd*dt; else if (d > 230) e.x += dir*spd*dt; if (e.cd <= 0 && d > 90 && d < 280){ e.st = 'windup'; e.t = 0; } }
     else if (e.kind === 'inspector'){ if (d > 52) e.x += dir*spd*dt; else if (e.cd <= 0 && tp.y < 20){ e.st = 'windup'; e.t = 0; } }
   } else if (e.st === 'windup'){
-    e.face = dir; const wt = e.kind === 'inspector' ? 0.6 : e.kind === 'thrower' ? 0.5 : e.kind === 'runner' ? 0.35 : 0.42;
+    e.face = dir; const wt = e.kind === 'inspector' ? 0.6 : e.kind === 'guard' ? 0.5 : e.kind === 'thrower' ? 0.5 : e.kind === 'runner' ? 0.35 : e.kind === 'intern' ? 0.28 : 0.42;
     if (e.t >= wt){
       e.t = 0; e.hit = false;
       if (e.kind === 'thrower'){ TR.pr.push({ x:e.x + e.face*14, y:50, vx:e.face*175, dmg:sp.dmg, life:3, mine:false }); sfx.swing(); e.st = 'walk'; e.cd = 2.0 + Math.random()*0.8; }
@@ -100,18 +119,77 @@ function trUpdateEnemy(e, dt){
       e.x += lf*270*dt;
       if (!e.hit && Math.abs(tp.x - e.x) < 24 && tp.y < 24){ e.hit = true; trHurtPlayer(sp.dmg, e.x, e, false); }
       if (e.t >= 0.42){ e.st = 'walk'; e.cd = 1.4; }
+    } else if (e.kind === 'guard'){
+      e.x += lf*130*dt;                                                                                      // shield bash
+      if (!e.hit && e.t > 0.05){ const rx = (tp.x - e.x)*lf; if (rx > -6 && rx < 50 && tp.y < 26){ e.hit = true; trHurtPlayer(sp.dmg, e.x, e, true); } }
+      if (e.t >= 0.3){ e.st = 'walk'; e.cd = 1.3; }
     } else if (e.kind === 'inspector'){
       e.x += lf*30*dt;
       if (!e.hit && e.t > 0.06){ const rx = (tp.x - e.x)*lf; if (rx > -8 && rx < 74 && tp.y < 26){ e.hit = true; trHurtPlayer(sp.dmg, e.x, e, true); } }
       if (e.t >= 0.36){ e.st = 'walk'; e.cd = 1.5; }
     } else {
-      if (!e.hit && e.t > 0.05){ const rx = (tp.x - e.x)*lf; if (rx > -6 && rx < 46 && tp.y < 22){ e.hit = true; trHurtPlayer(sp.dmg, e.x, e, false); } }
-      if (e.t >= 0.22){ e.st = 'walk'; e.cd = 0.9 + Math.random()*0.4; }
+      if (!e.hit && e.t > 0.05){ const rx = (tp.x - e.x)*lf; if (rx > -6 && rx < (e.kind === 'intern' ? 36 : 46) && tp.y < 22){ e.hit = true; trHurtPlayer(sp.dmg, e.x, e, false); } }
+      if (e.t >= 0.22){ e.st = 'walk'; e.cd = (e.kind === 'intern' ? 0.6 : 0.9) + Math.random()*0.4; }
     }
   }
   if (e.haste > 0) e.haste -= dt;
   for (const o of TR.es) if (o !== e && o.st !== 'dead'){ const gap = e.x - o.x; if (Math.abs(gap) < 18){ e.x += (gap >= 0 ? 1 : -1)*40*dt; } }       // do not stack on each other
-  e.x = Math.max(-60, Math.min(TRN.carW + 60, e.x));
+  e.x = Math.max(-60, Math.min(TRN.carW + 60, e.x)); if (TR.arenaL !== null) e.x = Math.max(TR.arenaL + 10, Math.min(TR.arenaR - 10, e.x));
+}
+
+/* ---------- the Efficiency Consultant (boss): pink slips (jump / crouch), a warp-behind-you snip, a slam with floor shockwaves; at 75/50/25% HP he DOWNSIZES the car (bulkheads close in) ---------- */
+function trUpdateConsultant(e, dt){
+  const tp = TR.tp, dx = tp.x - e.x, d = Math.abs(dx), dir = dx >= 0 ? 1 : -1, sp = TE.consultant.spd*(1 + e.phase*0.14), ph = e.phase;
+  const f = e.hp/e.hpMax, want = f < 0.25 ? 3 : f < 0.5 ? 2 : f < 0.75 ? 1 : 0;
+  if (want > e.phase && e.st !== 'phase' && e.st !== 'warp' && e.st !== 'dead'){ e.phaseTo = want; e.st = 'phase'; e.t = 0; e.y = 0; e.d1 = e.d2 = false; e.fade = 1; trSay(e, ['', 'You are redundant.', 'Restructuring!', 'FINAL DOWNSIZING!'][want]); msg('DOWNSIZING!', 1.4, '#ff5a8a'); sfx.wave(); }
+  const end = () => { e.st = 'walk'; e.cd = Math.max(0.5, 1.5 - ph*0.3) + Math.random()*0.6; e.t = 0; };
+  switch (e.st){
+    case 'walk': {
+      e.face = dir; if (d > 150) e.x += dir*sp*dt; else if (d < 80) e.x -= dir*sp*0.9*dt;
+      if (e.cd <= 0){ const r = Math.random(); const pick = d < 95 ? (r < 0.5 ? 'snip' : r < 0.8 ? 'warp' : 'slam') : (r < 0.4 ? 'slips' : r < 0.7 ? 'warp' : 'slam');
+        e.st = pick; e.t = 0; e.hit = false; e.shots = 0;
+        if (pick === 'warp'){ let dest = tp.x - tp.face*88; if (TR.arenaL !== null && (dest < TR.arenaL + 24 || dest > TR.arenaR - 24)) dest = tp.x + tp.face*88; e.dest = TR.arenaL !== null ? Math.max(TR.arenaL + 24, Math.min(TR.arenaR - 24, dest)) : dest; trSay(e, 'Restructuring!'); }
+        else trSay(e, { snip:'Cost cutting!', slips:'Per my last memo...', slam:'Synergy!' }[pick]); }
+      break; }
+    case 'snip':
+      if (e.t < 0.25) e.face = dir;
+      if (e.t >= 0.42 && !e.hit){ e.hit = true; sfx.swing(); const rx = (tp.x - e.x)*e.face; if (rx > -8 && rx < 78 && tp.y < 28) trHurtPlayer(16, e.x, e, true); }
+      if (e.t >= 0.72) end();
+      break;
+    case 'slips': {
+      e.face = dir; const times = ph >= 1 ? [0.5, 0.78, 1.06] : [0.5, 0.8], hs = [24, 52, 24];
+      if (e.shots < times.length && e.t >= times[e.shots]){ TR.pr.push({ x:e.x + e.face*22, y:hs[e.shots], vx:e.face*(200 + ph*18), dmg:9, life:2.6, mine:false, slip:true }); e.shots++; sfx.swing(); }
+      if (e.t >= (ph >= 1 ? 1.35 : 1.1)) end();
+      break; }
+    case 'warp':
+      if (e.t < 0.35){ e.fade = 1 - e.t/0.35; }
+      else if (e.t < 0.85){ e.fade = 0; e.x = e.dest; }
+      else if (e.t < 0.95){ e.fade = Math.min(1, (e.t-0.85)/0.1); e.face = dir; }
+      else { e.fade = 1; e.st = 'snip'; e.t = 0.2; e.hit = false; e.face = dir; }
+      break;
+    case 'slam':
+      if (e.t < 0.55){ e.y = 95*Math.sin(Math.PI*e.t/0.55); e.x += dir*175*dt; e.face = dir; }
+      else { if (!e.hit){ e.hit = true; e.y = 0; TR.shake = 0.55; TR.stop = 0.06; noise(0.25, 0.3, 160); sfx.hit();
+          TR.pr.push({ x:e.x, y:14, vx:190 + ph*15, dmg:14, life:1.5, mine:false, wave:true }, { x:e.x, y:14, vx:-190 - ph*15, dmg:14, life:1.5, mine:false, wave:true });
+          if (d < 30 && tp.y < 24) trHurtPlayer(16, e.x, e, true); }
+        if (e.t >= 0.95) end(); }
+      break;
+    case 'phase': {
+      e.face = dir; e.flash = 0.04;
+      if (e.t >= 0.3 && !e.d1){ e.d1 = true; const to = e.phaseTo, W = TRN.W;
+        if (to === 1) TR.arenaRt = Math.max(TR.arenaLt + 300, TR.arenaR - 70); else if (to === 2) TR.arenaLt = Math.min(TR.arenaRt - 250, TR.arenaL + 70); else { TR.arenaLt = Math.min(TR.arenaRt - 210, TR.arenaL + 45); TR.arenaRt = Math.max(TR.arenaLt + 210, TR.arenaR - 45); }
+        sfx.hit(); noise(0.4, 0.35, 120); TR.shake = 0.6; }
+      if (e.t >= 0.9 && !e.d2){ e.d2 = true; const kinds = [[], ['intern','intern'], ['guard','intern'], ['inspector','intern']][e.phaseTo];
+        kinds.forEach((k, i) => trSpawn(k, i % 2 === 0 ? TR.arenaL + 28 + (i>>1)*22 : TR.arenaR - 28 - (i>>1)*22)); }
+      if (e.t >= 1.6){ e.phase = e.phaseTo; end(); }
+      break; }
+    default: e.st = 'walk';
+  }
+}
+function trBossDown(e){
+  msg('DOWNSIZED!  THE EFFICIENCY CONSULTANT IS OUT OF A JOB  +220 XP', 3.4, '#3cff8a');
+  for (const o of TR.es) if (o !== e && o.st !== 'dead'){ o.hp = 0; o.st = 'dead'; o.t = 0; o.vx = (o.x >= e.x ? 1 : -1)*120; }
+  TR.pr = []; TR.arenaLt = TR.lockCam - 60; TR.arenaRt = TR.lockCam + TRN.W + 60; TR.stop = 0.15; TR.shake = 0.7;
 }
 
 /* ---------- the player ---------- */
@@ -157,6 +235,7 @@ function trUpdatePlayer(dt){
   tp.vy -= 1050*dt; tp.y += tp.vy*dt; if (tp.y <= 0){ tp.y = 0; tp.vy = 0; if (tp.st === 'jump') tp.st = 'idle'; if (tp.st === 'atk' && tp.air){ tp.air = false; } }
   /* bounds: the car, and the camera lock while a wave is alive */
   let lo = 12, hi = TRN.carW - 12; if (trLocked()){ lo = Math.max(lo, TR.lockCam + 14); hi = Math.min(hi, TR.lockCam + TRN.W - 14); }
+  if (TR.arenaL !== null){ lo = Math.max(lo, TR.arenaL + 12); hi = Math.min(hi, TR.arenaR - 12); }
   tp.x = Math.max(lo, Math.min(hi, tp.x));
 }
 function trStartAtk(tp, idx){ tp.dashAtk = false; tp.st = 'atk'; tp.t = 0; tp.hit = false; tp.queued = false; tp.idx = idx; tp.lastIdx = idx; tp.chainT = 0; if (!tp.air) tp.vx = 0; }
@@ -193,7 +272,9 @@ function updateTrain(real){
   const tp = TR.tp, car = CARS[TR.car];
   if (!trLocked()){ const tgt = Math.max(0, Math.min(TRN.carW - TRN.W, tp.x - 210)); TR.cam += (tgt - TR.cam)*Math.min(1, real*6); }
   car.waves.forEach((w, i) => { if (!TR.spawned[i] && tp.x >= w.x && !trLocked()){ TR.spawned[i] = true; trSpawnWave(w); } });
-  if (trLocked() && trAlive() === 0){ TR.lockCam = null; const last = TR.spawned.every(Boolean); msg(last ? 'CAR CLEAR!  HEAD FOR THE DOOR  >>' : 'GO!  >>', 1.6, '#3cff8a'); sfx.wave(); }
+  if (TR.arenaL !== null){ const oL = TR.arenaL, oR = TR.arenaR; TR.arenaL += (TR.arenaLt - TR.arenaL)*Math.min(1, real*5); TR.arenaR += (TR.arenaRt - TR.arenaR)*Math.min(1, real*5); if (Math.abs(TR.arenaL - oL) + Math.abs(TR.arenaR - oR) > 0.6) TR.shake = Math.max(TR.shake, 0.18); }
+  for (const sy of TR.says) sy.t -= real; TR.says = TR.says.filter(sy => sy.t > 0);
+  if (trLocked() && trAlive() === 0){ TR.lockCam = null; TR.arenaL = TR.arenaR = null; const last = TR.spawned.every(Boolean); msg(last ? 'CAR CLEAR!  HEAD FOR THE DOOR  >>' : 'GO!  >>', 1.6, '#3cff8a'); sfx.wave(); }
   const cleared = TR.spawned.every(Boolean) && !trLocked() && trAlive() === 0;
   if (cleared && tp.x > TRN.carW - 40 && !TR.leaving){
     TR.leaving = true; fadeTo(1, 0.6, () => {
@@ -275,12 +356,20 @@ function drawTrain(g){
   const cleared = TR.spawned && TR.spawned.every(Boolean) && !trLocked() && trAlive() === 0;
   door(-30, false, TR.car > 0 ? CARS[TR.car-1].name : 'STATION'); door(TRN.carW - 30, cleared && Math.floor(t*3)%2 === 0, TR.car + 1 < CARS.length ? CARS[TR.car+1].name : 'FRONT');
   /* people, in depth order of nothing (one lane) */
+  if (TR.arenaL !== null){                                                                                      // bulkheads closing the car in (DOWNSIZING)
+    const lx = Math.round(TR.arenaL - cam), rx = Math.round(TR.arenaR - cam);
+    const panel = (x0, x1, edge) => { if (x1 - x0 < 2) return; g.fillStyle = NAVY; g.fillRect(x0, 0, x1 - x0, 300); g.fillStyle = '#6b7387'; g.fillRect(x0 + 1, 0, x1 - x0 - 2, 300); g.fillStyle = '#7d8597'; for (let yy = 12; yy < 270; yy += 38) g.fillRect(x0 + 1, yy, x1 - x0 - 2, 2);
+      const ex = edge > 0 ? x1 - 9 : x0; for (let yy = 0; yy < 270; yy += 16){ g.fillStyle = (yy/16)%2 ? '#1b1f2e' : '#ffe14a'; g.fillRect(ex, yy, 9, 8); g.fillStyle = (yy/16)%2 ? '#ffe14a' : '#1b1f2e'; g.fillRect(ex, yy + 8, 9, 8); } };
+    panel(-30, lx, 1); panel(rx, 510, -1);
+  }
   for (const c of TR.cof){ const sx = c.x - cam; g.drawImage(trCup(), sx - 6, fy - 22 + Math.sin(t*5)*2, 12, 16); }
   const tp = TR.tp, list = [];
   for (const e of TR.es) list.push({ x:e.x, f:() => trDrawEnemy(g, e, cam) });
   list.push({ x:tp.x, f:() => trDrawPlayer(g, tp, cam) });
   list.sort((a,b) => a.x - b.x).forEach(o => o.f());
-  for (const p of TR.pr){ const sx = p.x - cam, sy = fy - p.y; g.save(); g.translate(sx, sy); g.rotate(TR.t*14*Math.sign(p.vx)); g.drawImage(trPaper(p.mine), -6, -6, 12, 12); g.restore(); }
+  for (const p of TR.pr){ const sx = p.x - cam, sy = fy - p.y;
+    if (p.wave){ const dr = Math.sign(p.vx); g.fillStyle = '#ff5a8a'; g.beginPath(); g.moveTo(sx - 10*dr, fy); g.lineTo(sx + 4*dr, fy - 22); g.lineTo(sx + 12*dr, fy); g.fill(); g.fillStyle = '#ffa0c0'; g.beginPath(); g.moveTo(sx - 3*dr, fy); g.lineTo(sx + 5*dr, fy - 12); g.lineTo(sx + 9*dr, fy); g.fill(); continue; }
+    g.save(); g.translate(sx, sy); g.rotate(TR.t*14*Math.sign(p.vx)); if (p.slip && !p.mine){ g.fillStyle = NAVY; g.fillRect(-8, -6, 16, 12); g.fillStyle = '#ffb0c8'; g.fillRect(-7, -5, 14, 10); g.fillStyle = '#b5463f'; g.fillRect(-5, -2, 10, 2); g.fillRect(-5, 1, 6, 2); } else g.drawImage(trPaper(p.mine), -6, -6, 12, 12); g.restore(); }
   for (const f of TR.fx){ g.globalAlpha = Math.max(0, 1 - f.t/0.5); g.fillStyle = f.col; g.fillRect(f.x - cam - 1, fy - f.y - 1, 3, 3); } g.globalAlpha = 1;
   if (G.vign > 0){ const gr = g.createRadialGradient(240,135,100,240,135,300); gr.addColorStop(0,'rgba(165,42,63,0)'); gr.addColorStop(1,'rgba(165,42,63,'+Math.min(0.6,G.vign*0.5)+')'); g.fillStyle = gr; g.fillRect(0,0,480,270); }
   if (tun > 0){ g.globalAlpha = 0.32*tun; g.fillStyle = '#10131c'; g.fillRect(-10, -10, 500, 300); g.globalAlpha = 1; if (tun > 0.6 && Math.floor(t*14)%9 === 0){ g.globalAlpha = 0.12; g.fillStyle = '#fff'; g.fillRect(-10, -10, 500, 300); g.globalAlpha = 1; } }
@@ -289,13 +378,28 @@ function drawTrain(g){
 let trCupCv = null, trPaperCv = [null, null];
 function trCup(){ if (!trCupCv){ const c = mkCanvas(12,16), g = c.getContext('2d'); px(g,1,3,10,12,NAVY); px(g,2,4,8,10,'#f4f1ea'); px(g,2,7,8,4,'#8f5a3a'); px(g,0,2,12,3,NAVY); px(g,1,2,10,2,'#b5463f'); trCupCv = c; } return trCupCv; }
 function trPaper(mine){ const k = mine ? 1 : 0; if (!trPaperCv[k]){ const c = mkCanvas(14,14), g = c.getContext('2d'); px(g,0,0,14,14,NAVY); px(g,1,1,12,12,mine ? '#bcd6e8' : '#e8e6e0'); px(g,3,3,8,2,'#7d8597'); px(g,3,6,8,1,'#7d8597'); px(g,3,9,5,3,'#b5463f'); trPaperCv[k] = c; } return trPaperCv[k]; }
+function trBossPose(e){
+  if (e.st === 'snip') return e.t < 0.42 ? 'windup' : 'attack';
+  if (e.st === 'slips') return (e.shots === 0 && e.t < 0.5) ? 'windup' : 'attack';
+  if (e.st === 'slam') return 'windup';
+  if (e.st === 'phase') return 'windup';
+  return 'walk';
+}
 function trDrawEnemy(g, e, cam){
-  const st = e.air ? 'hurt' : e.st === 'windup' ? 'windup' : e.st === 'attack' ? 'attack' : e.st === 'stagger' || e.st === 'dead' ? 'hurt' : 'walk', fr = Math.floor(e.anim*5)%2;
-  const cv = trSprite(e.kind, st, st === 'walk' ? fr : 0, e.flash > 0), s = e.kind === 'inspector' ? 1.12 : 1.1, w = cv.width*s, h = cv.height*s, sx = e.x - cam, sy = TRN.floorY - e.y;
-  g.save(); g.translate(sx, sy); g.globalAlpha = e.st === 'dead' ? e.fade : 1; if (e.face < 0) g.scale(-1, 1); if (e.st === 'dead') g.rotate(0.9*(1-e.fade)*(e.vx >= 0 ? 1 : -1));
-  g.imageSmoothingEnabled = false; if (e.haste > 0) g.filter = 'sepia(1) saturate(3)'; g.drawImage(cv, -w/2, -h + 2, w, h); g.restore();
-  g.fillStyle = 'rgba(0,0,0,.28)'; g.beginPath(); g.ellipse(sx, TRN.floorY + 1, 13, 3, 0, 0, 6.3); g.fill();
-  if (e.st === 'windup'){ g.fillStyle = '#ff5a4a'; g.fillRect(sx - 1, sy - h - 8, 3, 6); g.fillRect(sx - 1, sy - h - 1, 3, 2); }          // "!" telegraph
+  const boss = e.kind === 'consultant';
+  const st = boss ? trBossPose(e) : e.air ? 'hurt' : e.st === 'windup' ? 'windup' : e.st === 'attack' ? 'attack' : e.st === 'stagger' || e.st === 'dead' ? 'hurt' : 'walk', fr = Math.floor(e.anim*5)%2;
+  const cv = trSprite(e.kind, st, st === 'walk' ? fr : 0, e.flash > 0), s = TSIZE[e.kind] || 1.1, w = cv.width*s, h = cv.height*s, sx = e.x - cam, sy = TRN.floorY - e.y;
+  if (boss && e.st === 'warp' && e.t >= 0.3 && e.t < 0.9){ const mx = e.dest - cam; g.fillStyle = 'rgba(255,90,138,.5)'; g.beginPath(); g.ellipse(mx, TRN.floorY + 1, 24, 5, 0, 0, 6.3); g.fill(); g.strokeStyle = '#ff5a8a'; g.lineWidth = 2; g.beginPath(); g.ellipse(mx, TRN.floorY + 1, 24 - (e.t*14)%8, 5, 0, 0, 6.3); g.stroke(); }
+  g.save(); g.translate(sx, sy); g.globalAlpha = e.st === 'dead' ? e.fade : boss ? Math.max(0, e.fade) : 1; if (e.face < 0) g.scale(-1, 1); if (e.st === 'dead') g.rotate(0.9*(1-e.fade)*(e.vx >= 0 ? 1 : -1));
+  g.imageSmoothingEnabled = false; if (e.haste > 0) g.filter = 'sepia(1) saturate(3)'; g.drawImage(cv, -w/2, -h + 2, w, h);
+  if (boss && e.st === 'phase'){ g.globalAlpha = 0.25 + 0.2*Math.sin(TR.t*30); g.drawImage(trSprite('consultant', st, 0, true), -w/2, -h + 2, w, h); }
+  if (e.kind === 'guard'){                                                                                 // riot shield (drops while he is broken)
+    if (!(e.broken > 0)){ g.fillStyle = NAVY; g.fillRect(8, -62, 11, 46); g.fillStyle = '#8fa6bd'; g.fillRect(9, -61, 9, 44); g.fillStyle = '#c9d6e3'; g.fillRect(9, -61, 3, 44); g.fillStyle = '#5f7a96'; g.fillRect(9, -40, 9, 3); }
+    else { g.fillStyle = NAVY; g.fillRect(12, -22, 14, 8); g.fillStyle = '#8fa6bd'; g.fillRect(13, -21, 12, 6); }
+  }
+  g.restore();
+  g.fillStyle = 'rgba(0,0,0,.28)'; g.beginPath(); g.ellipse(sx, TRN.floorY + 1, (boss ? 22 : 13)*(1 - Math.min(0.6, e.y/180)), 3, 0, 0, 6.3); g.fill();
+  if (e.st === 'windup' && !boss){ g.fillStyle = '#ff5a4a'; g.fillRect(sx - 1, sy - h - 8, 3, 6); g.fillRect(sx - 1, sy - h - 1, 3, 2); }          // "!" telegraph
 }
 function trDrawPlayer(g, tp, cam){
   const pose = tp.st === 'atk' ? 'reach' : tp.st === 'block' ? 'holdsword' : tp.st === 'spin' ? 'reach' : tp.st === 'jump' || tp.y > 2 ? 'walk0' : tp.crouch ? 'sit' : tp.st === 'walk' || tp.st === 'dash' ? (Math.floor(tp.walkT/0.14)%2 ? 'walk1' : 'walk0') : 'stand';
@@ -328,7 +432,11 @@ function drawTrainHUD(){
   const sr = styleRank(); if (G.style > 1){ HT('STYLE', DW-24, 158, 13, '#a3aab8', 'right'); HT('DCBAS'[sr], DW-24, 200, 40, ['#a3aab8','#8fb4d0','#3cff8a','#ffe14a','#ff5a4a'][sr], 'right'); }
   if (hasSkill('whirlwind')){ box(24, DH-52, 200, 12, '#2c3142'); HR(24, DH-52, 200*(1 - tp.spinCd/3.4), 12, tp.spinCd <= 0 ? '#ffe14a' : '#5a6275'); HT(tp.spinCd <= 0 ? 'WHIRLWIND READY  ('+codeName(binds.flip)+')' : 'WHIRLWIND...', 24, DH-60, 13, tp.spinCd <= 0 ? '#ffe14a' : '#a3aab8'); }
   HT('A/D move   SPACE/W jump   S crouch   CLICK/J slash x3   RIGHT-CLICK/K block (early = PARRY)   Q dash' + (hasSkill('dashslash') ? ' (+slash = DASH SLASH)' : '') + (hasSkill('whirlwind') ? '   E whirlwind' : '') + (hasSkill('launcher') ? '   3rd hit LAUNCHES' : '') + '   ESC pause', DW/2, DH-12, 12, '#a3aab8', 'center');
-  for (const e of TR.es) if (e.st !== 'dead'){ const sx = (e.x - TR.cam)*2, sy = (TRN.floorY - (e.kind === 'inspector' ? 84 : 76))*2; if (sx > 0 && sx < DW){ box(sx-22, sy, 44, 5, '#2e1520'); HR(sx-22, sy, 44*Math.max(0,e.hp/e.hpMax), 5, '#8fa66a'); } }
+  for (const e of TR.es) if (e.st !== 'dead' && e.kind !== 'consultant'){ const sx = (e.x - TR.cam)*2, sy = (TRN.floorY - e.y - 80*(TSIZE[e.kind] || 1.1))*2; if (sx > 0 && sx < DW){ box(sx-22, sy, 44, 5, '#2e1520'); HR(sx-22, sy, 44*Math.max(0,e.hp/e.hpMax), 5, e.kind === 'guard' && !(e.broken > 0) ? '#8fb4d0' : '#8fa66a'); } }
+  const boss = TR.es.find(e => e.kind === 'consultant' && e.st !== 'dead');
+  if (boss){ const f = Math.max(0, boss.hp/boss.hpMax); HT('THE EFFICIENCY CONSULTANT', DW/2, DH-90, 18, '#ff5a8a', 'center'); box(DW/2-240, DH-80, 480, 14, '#2e1520'); HR(DW/2-240, DH-80, 480*f, 14, '#b5463f'); HR(DW/2-240, DH-80, 480*f, 4, '#ff8fb0');
+    for (const q of [0.75, 0.5, 0.25]) HR(DW/2-240 + 480*q - 1, DH-82, 2, 18, '#fdf6e3'); }
+  for (const sy of TR.says){ const e = sy.e, sx = (e.x - TR.cam)*2, y = (TRN.floorY - e.y - 86*(TSIZE[e.kind] || 1.1))*2 - 6; dctx.globalAlpha = Math.min(1, sy.t/0.4); HT(sy.text, Math.max(120, Math.min(DW-120, sx)), y, 15, '#ffd0e0', 'center'); dctx.globalAlpha = 1; }
   for (const n of TR.nums){ dctx.globalAlpha = Math.max(0, 1 - n.t/0.9); HT(String(n.v), (n.x - TR.cam)*2, (TRN.floorY - n.y)*2 - n.t*50, 22, n.c, 'center'); } dctx.globalAlpha = 1;
   const cleared = TR.spawned && TR.spawned.every(Boolean) && !trLocked() && trAlive() === 0;
   if ((cleared || (!trLocked() && trAlive() === 0 && TR.spawned && TR.spawned.some(Boolean))) && Math.floor(TR.t*2)%2) HT('GO  >>', DW-60, DH/2-40, 34, '#3cff8a', 'right');

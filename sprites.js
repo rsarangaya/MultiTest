@@ -9,11 +9,14 @@ const ENEMY_COL = {
   grunt:  { skin:'#8fa66a', skin2:'#6b8650', suit:'#2c3142', suit2:'#3f4658', shirt:'#e8e6e0', tie:'#b5463f', shoe:'#1b1f2e', bulb:'#ffe14a' },
   runner: { skin:'#bcd6e8', skin2:'#8fb4d0', suit:'#5a6275', suit2:'#7d8597', shirt:'#e8e6e0', tie:'#ffe14a', shoe:'#1b1f2e', bulb:'#ff5a4a' },
   thrower:{ skin:'#a89f91', skin2:'#8d94a3', suit:'#4a3f66', suit2:'#6b3a5c', shirt:'#e8e6e0', tie:'#b5463f', shoe:'#1b1f2e', bulb:'#3cff8a' },
+  intern: { skin:'#f2b8b0', skin2:'#d99088', suit:'#8f5a3a', suit2:'#a8734a', shirt:'#fdf6e3', tie:'#3f5f82', shoe:'#1b1f2e', bulb:'#3cff8a' },     // train brawler: tiny, fast, weak
+  guard:  { skin:'#8a9b78', skin2:'#667a56', suit:'#1f2a44', suit2:'#2f3f66', shirt:'#cfd6e0', tie:'#1f2a44', shoe:'#0f1220', bulb:'#ffe14a' },     // train brawler: security (the shield is drawn in train.js)
 };
 function paintEnemyRaw(kind, state, frame){
   if (kind === 'boss') return paintBossRaw(state, frame);
   if (kind === 'counselor') return paintCounselorRaw(state, frame);
   if (kind === 'inspector') return paintInspectorRaw(state, frame);
+  if (kind === 'consultant') return paintConsultantRaw(state, frame);
   const c = mkCanvas(32,64), g = c.getContext('2d'), k = ENEMY_COL[kind];
   const walk = state === 'walk', lean = state === 'hurt' ? -2 : 0, bob = walk && frame ? 1 : 0;
   const up = state === 'windup', out = state === 'attack', s = walk ? (frame ? 3 : -3) : 0, hot = up || out;
@@ -365,5 +368,37 @@ function paintInspectorRaw(state, frame){
   r(11,hy-1,18,5,SU); r(11,hy+3,18,2,GOLD); r(9,hy+5,22,2,shade(SU,.7)); r(19,hy,3,2,GOLD);                                                                      // conductor cap
   r(14,hy-4,1,4,SK2); r(25,hy-4,1,4,SK2); r(13,hy-5,3,2,'#ff5a4a'); r(24,hy-5,3,2,'#ff5a4a');                                                                    // antennae through the cap
   if (state === 'windup' || state === 'attack') r(16,hy+17,8,3,'#7a2a30'); else r(17,hy+18,6,1,NAVY);
+  return c;
+}
+
+/* ---------- boss: the Efficiency Consultant (end of the train). Tall, thin, pinstripes, hot-pink tie, a calculator in one hand and giant scissors in the other ---------- */
+function paintConsultantRaw(state, frame){
+  const c = mkCanvas(84,88), g = c.getContext('2d'), r = (x,y,w,h,col) => px(g,Math.round(x),Math.round(y),w,h,col);
+  const SK = '#a9bccb', SK2 = '#7d93a6', SK3 = '#cfdde8', SU = '#3b4352', SU2 = '#4f596b', ox = 18, oy = 8;
+  const s = state === 'walk' ? (frame ? 2 : -2) : 0;
+  const scissors = (x, y, open, dx) => { const L = 22; r(x, y, 4, 4, '#b5463f'); r(x+3, y-1, 2, 2, NAVY);                                       // handle rings + two crossed blades
+    for (let i=0;i<L;i++){ const o = Math.round(i*open/L); r(x + 4*dx*0 + (dx > 0 ? 4 + i : -i - 2), y + 1 - o, 2, 2, '#e8e6e0'); r(x + (dx > 0 ? 4 + i : -i - 2), y + 2 + o, 2, 2, '#a3aab8'); } };
+  r(ox+14+s,oy+58,8,19,'#2a2f3a'); r(ox+26-s,oy+58,8,19,'#2a2f3a'); r(ox+13+s,oy+76,10,4,NAVY); r(ox+25-s,oy+76,10,4,NAVY);                       // legs + shoes
+  r(ox+9,oy+28,30,32,SU); for (let x=ox+11;x<ox+38;x+=4) r(x,oy+29,1,30,SU2); r(ox+34,oy+28,5,32,shade(SU,.78)); r(ox+9,oy+28,3,32,shade(SU,1.15));      // pinstripe jacket
+  r(ox+20,oy+28,8,14,'#e8e6e0'); r(ox+17,oy+28,3,16,SU2); r(ox+28,oy+28,3,16,SU2); r(ox+22,oy+30,4,24,'#ff5a8a'); r(ox+23,oy+30,1,24,'#ffa0c0'); r(ox+21,oy+54,6,2,'#ff5a8a');   // shirt + hot-pink tie
+  r(ox+31,oy+38,6,3,'#ffe14a'); r(ox+12,oy+48,7,5,NAVY); r(ox+13,oy+49,5,3,'#e8e6e0');                                                          // pocket square, badge
+  if (state === 'windup'){                                                                                                                      // scissors raised high and open
+    r(ox+2,oy+14,6,16,SU); r(ox+40,oy+14,6,16,SU); r(ox+1,oy+9,7,6,SK); r(ox+40,oy+9,7,6,SK);
+    r(ox+39,oy+6,8,6,NAVY); r(ox+40,oy+7,6,4,'#b5463f');                                                                               // handle
+    for (let i=0;i<22;i++){ r(ox+44+Math.round(i*0.55),oy+4-Math.round(i*0.8),3,3,NAVY); r(ox+45+Math.round(i*0.55),oy+5-Math.round(i*0.8),2,2,'#e8e6e0'); r(ox+44+Math.round(i*0.1),oy+4-Math.round(i*0.9),3,3,NAVY); r(ox+45+Math.round(i*0.1),oy+5-Math.round(i*0.9),2,2,'#a3aab8'); }   // open blades
+  } else if (state === 'attack'){                                                                                                               // snip! blades out to the front
+    r(ox+39,oy+32,10,6,SU); r(ox+47,oy+32,6,6,SK); r(ox+51,oy+30,6,8,NAVY); r(ox+52,oy+31,4,6,'#b5463f');
+    for (let i=0;i<22;i++){ r(ox+57+i,oy+30-(i>>3),3,3,NAVY); r(ox+58+i,oy+31-(i>>3),2,1,'#e8e6e0'); r(ox+57+i,oy+36+(i>>3),3,3,NAVY); r(ox+58+i,oy+37+(i>>3),2,1,'#a3aab8'); }   // snip!
+    r(ox+1,oy+34,8,22,SU); r(ox+0,oy+54,8,5,SK); r(ox-5,oy+38,13,15,NAVY); r(ox-4,oy+39,11,13,'#1b1f2e'); r(ox-3,oy+40,9,3,'#3cff8a');
+  } else {                                                                                                                                      // calculator in one hand, scissors hanging from the other
+    r(ox+1,oy+34,8,22,SU); r(ox+0,oy+54,8,5,SK); r(ox-5,oy+36,13,16,NAVY); r(ox-4,oy+37,11,14,'#1b1f2e'); r(ox-3,oy+38,9,3,'#3cff8a'); for (let i=0;i<3;i++) for (let k=0;k<3;k++) r(ox-3+k*3,oy+43+i*3,2,2,'#8fb4d0');
+    r(ox+39,oy+32,7,24,SU); r(ox+39,oy+55,7,5,SK); r(ox+40,oy+58,4,4,'#b5463f'); r(ox+41,oy+62,2,16,'#e8e6e0'); r(ox+44,oy+62,2,16,'#a3aab8');
+  }
+  r(ox+19,oy+26,10,5,SK2);                                                                                                                      // neck
+  for (let y=0;y<28;y++){ const t = y/27, hw = Math.max(3, Math.round(11*Math.sqrt(Math.max(0,1-((t-0.44)/0.66)**2)))); r(ox+24-hw,oy+y,hw*2,1,SK); r(ox+24+hw-3,oy+y,3,1,SK2); r(ox+24-hw,oy+y,2,1,SK3); }   // long narrow head
+  for (const [ex,ey,ew,eh] of [[14,11,5,3],[17,13,4,3],[19,15,3,2]]){ r(ox+ex,oy+ey,ew,eh,NAVY); r(ox+48-ex-ew,oy+ey,ew,eh,NAVY); }               // slanted black eyes
+  r(ox+17,oy+13,2,2,'#ff5a4a'); r(ox+29,oy+13,2,2,'#ff5a4a'); r(ox+13,oy+9,12,1,NAVY); r(ox+23,oy+9,12,1,NAVY);                                  // glinting red pupils, flat disapproving brows
+  if (state === 'windup' || state === 'attack'){ r(ox+17,oy+21,14,4,'#7a2a30'); r(ox+17,oy+21,14,1,'#e8e6e0'); } else r(ox+18,oy+22,12,1,NAVY);
+  r(ox+17,oy+1,2,6,SK2); r(ox+29,oy+1,2,6,SK2); r(ox+16,oy-2,4,3,'#ff5a4a'); r(ox+28,oy-2,4,3,'#ff5a4a');                                      // antennae
   return c;
 }

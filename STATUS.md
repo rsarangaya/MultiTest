@@ -22,6 +22,10 @@ First-person hack & slash (three.js, plain HTML/JS, optional Electron portable e
   staggers the attacker), Q dash (i-frames), E whirlwind (3.4 s cooldown), air attacks. Each car has scripted waves (they spawn from both screen edges and lock the camera until cleared;
   "GO >>" unlocks the door). **Skill-gated:** WHIRLWIND (E) needs the Whirlwind skill, a slash during a dash needs DASH SLASH, heavy hits launching/juggling enemies needs LAUNCHER, a lethal hit leaving you at 25 HP needs SECOND WIND
   (once per car); IRON GUARD widens the parry window; the dash cooldown follows FOOTWORK. The basic combo, jump, crouch, block and dash are always available. Locked moves show a hint; the HUD only lists unlocked moves.
+  **Cars:** 5 (CAR 1-4 + the BOSS CAR). **More enemies:** INTERN (tiny, fast, 2 HP, comes in swarms), SECURITY GUARD (riot shield blocks light front hits; the heavy 3rd hit, whirlwind, dash slash,
+  jump-ins and hits from behind get through; a heavy hit breaks the shield for ~2 s). **Boss: THE EFFICIENCY CONSULTANT** (`trUpdateConsultant`, HP 70, ignores light hits): PINK SLIPS (low = jump, mid = crouch),
+  a WARP behind you (red marker) into a snip, a SLAM with floor shockwaves (jump them); at 75 / 50 / 25% HP he DOWNSIZES: bulkheads slam in and shrink the arena (452 -> ~234 px) and he calls in
+  recruiters while invulnerable. Beating him unlocks the exit -> `TO BE CONTINUED`.
   **Look:** a train car interior (rounded windows with blinds, adverts, grab rail + swaying straps, continuous bench), scenery that whips past (far skyline, mid buildings, blurred telegraph poles + wires, embankment), tunnels every ~14 s (dark, streaking lights, dimmed car), rail clack sound + a small jolt and sway. Enemies are the same recruiters (grunt punch, runner lunge, thrower memos you can deflect, Ticket Inspector with armour + baton sweep). Coffee drops, XP, style
   rank and skill bonuses apply.
 - Phases (`OBJ.phase`): `arrive goto cut survive open enter (store) home gohome homecoming nextday station pulled boss bossdone gostation ticket train traindone`. Saves/Continue cover all of them
@@ -56,7 +60,7 @@ Beware: scripts share one global scope, so new helper names must not collide wit
   have no touch controls yet (a MENU button is shown).
 
 ## Rest of chapter 2 (to build)
-- Boss at the front of the train: **the Middle Manager** (clones with one real one, CC-all blast), then arrival in Nextown and the pickup counter for mom's order, then the way back and **home** (that ends chapter 2).
+- Arrival in Nextown and the pickup counter for mom's order, then the way back and **home** (that ends chapter 2). (The Middle Manager boss idea below is free for a later chapter.)
 - More brawler moves: launcher + juggle, a charged heavy, enemy grabs; a car with a **drink cart** hazard or **passengers** to protect; the same movement-damage idea (speed/combo/style) tuned for 2D.
 
 ## Other boss ideas (not built)

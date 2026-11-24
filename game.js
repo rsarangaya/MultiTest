@@ -1390,7 +1390,9 @@ function chapterItems(){
     { pos:R(4), label:'2.5  THE TRAIN - CAR 1  (side-scroller)', act:run(() => { Wave.n = 4; OBJ.seen = true; startTrain(0); }) },
     { pos:R(5), label:'2.6  THE TRAIN - CAR 2', act:run(() => { Wave.n = 4; OBJ.seen = true; startTrain(1); }) },
     { pos:R(6), label:'2.7  THE TRAIN - CAR 3', act:run(() => { Wave.n = 4; OBJ.seen = true; startTrain(2); }) },
-    { pos:[330, 470, 300], label:'BACK', act:() => { state = 'menu'; menuIdx = 0; } } ];
+    { pos:R(7), label:'2.8  THE TRAIN - CAR 4', act:run(() => { Wave.n = 4; OBJ.seen = true; startTrain(3); }) },
+    { pos:R(8), label:'2.9  THE EFFICIENCY CONSULTANT  (boss car)', act:run(() => { Wave.n = 4; OBJ.seen = true; startTrain(4); }) },
+    { pos:[330, 482, 300], label:'BACK', act:() => { state = 'menu'; menuIdx = 0; } } ];
 }
 function menuNav(){
   const items = state === 'options' ? optionRows() : state === 'skills' ? skillRows() : (state === 'menu' || state === 'paused' || state === 'dead' || state === 'chapters') ? menuItems() : [];
