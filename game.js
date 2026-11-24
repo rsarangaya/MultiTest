@@ -76,6 +76,7 @@ disp.addEventListener('mousedown', e => {
   if (state === 'play'){ if (!locked()) lockPointer(); keys[code] = true; pressed[code] = true; return; }
   mpos(e);
   if (state === 'intro' || state === 'card'){ introMouse(); return; }
+  if (state === 'train'){ keys[code] = true; pressed[code] = true; return; }
   if (state === 'store'){ if (ST.battle) clickUI(); else { keys[code] = true; pressed[code] = true; } return; }
   if (capture){ setBind(capture, code); capture = null; return; }
   clickUI();
@@ -1013,6 +1014,7 @@ function objText(){
   if (OBJ.phase === 'home') return 'GOT THE MILK - FIGHT YOUR WAY HOME   (RECRUITERS AHEAD)';
   if (OBJ.phase === 'station') return 'REACH THE TRAIN STATION   ('+Math.max(0, Math.round(Math.hypot(P.x-SX, P.z-STA.doorZ)))+'m)   -   RECRUITERS EVERYWHERE';
   if (OBJ.phase === 'boss') return 'DEFEAT THE CAREER COUNSELOR';
+  if (OBJ.phase === 'gostation') return 'WALK INTO THE TRAIN STATION   ('+Math.max(0, Math.round(Math.hypot(P.x-SX, P.z-STA.doorZ)))+'m)';
   if (OBJ.phase === 'gohome') return 'HEAD HOME - THE HOUSE IS SOUTH-WEST   ('+Math.round(Math.hypot(P.x-HOME.x, P.z-HOME.z))+'m)';
   return '';
 }
@@ -1026,7 +1028,7 @@ function setMood(horror){
   if (skyDome) skyDome.material.color.setHex(horror ? 0xffc4c4 : 0xffffff);
 }
 function hasSave(){ try { const s = JSON.parse(localStorage.getItem('deadend_save')); return s && s.wave > 0 ? s : null; } catch(e){ return null; } }
-function saveProgress(){ try { localStorage.setItem('deadend_save', JSON.stringify({ wave:Wave.n, kills:G.kills, prog, phase:OBJ.phase })); } catch(e){} }
+function saveProgress(){ try { localStorage.setItem('deadend_save', JSON.stringify({ wave:Wave.n, kills:G.kills, prog, phase:OBJ.phase, car:(typeof TR !== 'undefined' ? TR.car : 0) })); } catch(e){} }
 function clearSave(){ try { localStorage.removeItem('deadend_save'); } catch(e){} }
 function startWave(){
   Wave.n++; Wave.queue = []; restockVending(); restockRoofs(); P.swUsed = false;
@@ -1064,7 +1066,10 @@ function beginGame(sv, keepProg){
   if (sv && sv.prog){ prog.points = sv.prog.points; prog.level = sv.prog.level||1; prog.xp = sv.prog.xp||0; prog.ranks = migrateProg(sv.prog); }
   else if (!keepProg){ prog.points = 0; prog.level = 1; prog.xp = 0; prog.ranks = {}; }
   if (sv && (sv.phase === 'homecoming' || sv.phase === 'nextday')){ Wave.n = sv.wave; G.kills = sv.kills; startNextDay(); return; }                       // saved after chapter 1
-  if (sv && (sv.phase === 'station' || sv.phase === 'boss' || sv.phase === 'chapter2done')){ Wave.n = sv.wave; G.kills = sv.kills; if (sv.phase === 'boss') retryBoss(); else beginStation(); return; }   // saved in chapter 2
+  if (sv && sv.phase === 'gostation'){ Wave.n = sv.wave; G.kills = sv.kills; backToPlaza(); return; }
+  if (sv && sv.phase === 'ticket'){ Wave.n = sv.wave; G.kills = sv.kills; OBJ.phase = 'ticket'; saveProgress(); startScene(stationInteriorScript); return; }
+  if (sv && sv.phase === 'train'){ Wave.n = sv.wave; G.kills = sv.kills; startTrain(sv.car || 0); return; }
+  if (sv && (sv.phase === 'station' || sv.phase === 'boss' || sv.phase === 'bossdone' || sv.phase === 'chapter2done')){ Wave.n = sv.wave; G.kills = sv.kills; if (sv.phase === 'boss') retryBoss(); else beginStation(); return; }   // saved in chapter 2
   Wave.n = sv ? sv.wave : 0; Wave.state = 'break'; Wave.breakT = 2.5; Wave.queue = []; setMood(false);
   pauseFrom = 'play';
   OBJ.phase = sv ? ((sv.phase === 'endless' || sv.phase === 'home' || sv.phase === 'gohome') ? sv.phase : Wave.n >= 3 ? 'open' : 'survive') : (OBJ.seen ? 'survive' : keepProg ? 'goto' : 'arrive');   // a brand-new run opens on the arrival shot
@@ -1117,8 +1122,8 @@ function drawArriveHUD(){
   if (IN.dlg) drawDialogue();
   HT('HOLD F: fast-forward', DW-16, 24, 13, keys.KeyF ? '#ffe14a' : '#a3aab8', 'right');
 }
-function resumeFromPause(){ state = pauseFrom === 'store' ? 'store' : 'play'; if (state === 'play') lockPointer(); }
-function openPause(){ pauseFrom = state === 'store' ? 'store' : 'play'; state = 'paused'; menuIdx = 0; for (const k in keys) keys[k] = false; }
+function resumeFromPause(){ state = pauseFrom === 'store' ? 'store' : pauseFrom === 'train' ? 'train' : 'play'; if (state === 'play') lockPointer(); }
+function openPause(){ pauseFrom = state === 'store' ? 'store' : state === 'train' ? 'train' : 'play'; state = 'paused'; menuIdx = 0; for (const k in keys) keys[k] = false; }
 function exitGame(){ try { window.close(); } catch(e){} setTimeout(() => { state = 'exited'; }, 120); }
 
 /* ============================ main update ============================ */
@@ -1131,7 +1136,7 @@ function update(dt, real){
     if (OBJ.phase === 'cut' || OBJ.phase === 'enter') updateCut(dt*(keys.KeyF ? 4 : 1)); else { updatePlayer(dt); updateCombat(dt); }
     for (const e of enemies.slice()) updateEnemy(e, dt);
     updateProjectiles(dt); updateParticles(dt); updateCoffee(dt); updatePads(dt); updateVending(); if (OBJ.phase === 'survive' || OBJ.phase === 'endless' || OBJ.phase === 'home') updateWaves(dt);
-    if (OBJ.phase === 'station') updateStation(dt);
+    if (OBJ.phase === 'station' || OBJ.phase === 'gostation') updateStation(dt);
     if (PULL.thrown) updateThrow(dt);
     G.time += dt; BON.flip -= dt; BON.pad -= dt; BON.slamT -= dt; BON.close -= dt; BON.roof -= dt; closeCd -= dt; updateRoofs(dt); if (P.wall.on) BON.wall = 1.0; else BON.wall -= dt;
     G.style = Math.max(0, Math.min(100, G.style - dt*(G.speed < 3 && P.onGround ? 10 : 4))); G.comboT -= dt; if (G.comboT <= 0) G.combo = 0; G.vign = Math.max(0, G.vign - dt*1.6);
@@ -1271,7 +1276,7 @@ function drawHUD(){
   box(24,52,280,8,'#1f1018'); HR(24,52,280*Math.min(1,prog.xp/xpNeed(prog.level)),8,'#8fb4d0'); HT('LV '+prog.level, 316, 61, 13, '#8fb4d0');
   const inWaves = OBJ.phase === 'survive' || OBJ.phase === 'endless' || OBJ.phase === 'home';
   if (inWaves) HT('WAVE '+Math.max(1,Wave.n), DW-24, 40, 24, '#ffe14a', 'right');
-  else HT(OBJ.phase === 'boss' ? 'BOSS FIGHT' : (OBJ.phase === 'station' || OBJ.phase === 'pulled') ? 'STATION ROAD' : OBJ.phase === 'chapter2done' ? 'CHAPTER 2' : 'CHAPTER 1', DW-24, 40, 24, '#ffe14a', 'right');
+  else HT(OBJ.phase === 'boss' ? 'BOSS FIGHT' : (OBJ.phase === 'station' || OBJ.phase === 'pulled') ? 'STATION ROAD' : (OBJ.phase === 'gostation' || OBJ.phase === 'bossdone') ? 'CHAPTER 2' : 'CHAPTER 1', DW-24, 40, 24, '#ffe14a', 'right');
   HT('KILLS '+G.kills, DW-24, 66, 16, '#efe3cf', 'right');
   if (inWaves){ if (Wave.state === 'fight') HT('RECRUITERS '+(enemies.length+Wave.queue.length), DW-24, 88, 14, '#8fa66a', 'right');
     else HT('NEXT WAVE IN '+Math.ceil(Math.max(0,Wave.breakT)), DW-24, 88, 14, '#8fb4d0', 'right'); }
@@ -1318,7 +1323,7 @@ function menuItems(){
   if (state === 'dead') return deadT > 1.4 ? [ ...(sv ? [{ label:'CONTINUE', act:() => newGame(true) }] : []), { label:'NEW GAME', act:() => newGame(false) }, { label:'EXIT', act:exitGame } ] : [];
   if (state === 'menu') return [
     { label:'START', act:() => newGame(false) },
-    { label: sv ? (['homecoming','nextday','station','boss','chapter2done'].includes(sv.phase) ? 'CONTINUE  (CHAPTER 2)' : 'CONTINUE  (WAVE '+(sv.wave+1)+')') : 'CONTINUE', en:!!sv, act:() => newGame(true) },
+    { label: sv ? (['train'].includes(sv.phase) ? 'CONTINUE  (CHAPTER 3)' : ['homecoming','nextday','station','boss','bossdone','gostation','ticket','chapter2done'].includes(sv.phase) ? 'CONTINUE  (CHAPTER 2)' : 'CONTINUE  (WAVE '+(sv.wave+1)+')') : 'CONTINUE', en:!!sv, act:() => newGame(true) },
     { label:'CHAPTER SELECT  (TESTING)', act:() => { state = 'chapters'; menuIdx = 0; } },
     { label:'OPTIONS', act:() => { optionsFrom = 'menu'; state = 'options'; menuIdx = 0; } },
     { label:'EXIT', act:exitGame } ];
@@ -1370,17 +1375,22 @@ function treeNav(items){
 /* ---------- chapter select (testing): jump straight to any part of chapters 1-2, keeping your current level/skills ---------- */
 function chapterItems(){
   const run = (setup, pre) => () => { if (pre) pre(); beginGame(null, true); if (setup) setup(); };
+  const L = (k) => [40, 124 + k*36, 440], R = (k) => [500, 124 + k*36, 430], R3 = (k) => [500, 304 + k*36, 430];
   return [
-    { label:'1.1   PROLOGUE + INTRO  (new game)', act:() => newGame(false) },
-    { label:'1.2   STREET:  GET TO THE STORE', act:run(null, () => { OBJ.seen = false; }) },
-    { label:'1.3   STREET WAVES  (store is closed, survive to 9 AM)', act:run(() => { Wave.breakT = 1.5; }, () => { OBJ.seen = true; }) },
-    { label:'1.4   MOO-MART  (isometric stealth store)', act:run(() => { Wave.n = 3; OBJ.seen = true; startStore(); }) },
-    { label:'1.5   THE WAY HOME  (Hiring Manager again)', act:run(() => { Wave.n = 3; OBJ.seen = true; OBJ.phase = 'home'; signSprite.material.map = openTex; beacon.visible = false; Wave.state = 'break'; Wave.breakT = 1.5; }) },
-    { label:'1.6   HOMECOMING  (mom, sleep, end of chapter 1)', act:run(() => { Wave.n = 4; OBJ.seen = true; OBJ.phase = 'homecoming'; startScene(homecomingScript); }) },
-    { label:'2.1   THE NEXT DAY  (wake up, mom, wallet + sword)', act:run(() => { Wave.n = 4; OBJ.seen = true; startNextDay(); }) },
-    { label:'2.2   STATION ROAD  (rush to the station)', act:run(() => { Wave.n = 4; OBJ.seen = true; beginStation(); }) },
-    { label:'2.3   THE CAREER COUNSELOR  (boss fight)', act:run(() => { Wave.n = 4; OBJ.seen = true; retryBoss(); }) },
-    { label:'BACK', act:() => { state = 'menu'; menuIdx = 0; } } ];
+    { pos:L(0), label:'1.1  PROLOGUE + INTRO  (new game)', act:() => newGame(false) },
+    { pos:L(1), label:'1.2  STREET: GET TO THE STORE', act:run(null, () => { OBJ.seen = false; }) },
+    { pos:L(2), label:'1.3  STREET WAVES  (survive to 9 AM)', act:run(() => { Wave.breakT = 1.5; }, () => { OBJ.seen = true; }) },
+    { pos:L(3), label:'1.4  MOO-MART  (stealth store)', act:run(() => { Wave.n = 3; OBJ.seen = true; startStore(); }) },
+    { pos:L(4), label:'1.5  THE WAY HOME  (Hiring Manager again)', act:run(() => { Wave.n = 3; OBJ.seen = true; OBJ.phase = 'home'; signSprite.material.map = openTex; beacon.visible = false; Wave.state = 'break'; Wave.breakT = 1.5; }) },
+    { pos:L(5), label:'1.6  HOMECOMING  (end of chapter 1)', act:run(() => { Wave.n = 4; OBJ.seen = true; OBJ.phase = 'homecoming'; startScene(homecomingScript); }) },
+    { pos:R(0), label:'2.1  THE NEXT DAY  (wake up, mom, sword)', act:run(() => { Wave.n = 4; OBJ.seen = true; startNextDay(); }) },
+    { pos:R(1), label:'2.2  STATION ROAD  (the rush)', act:run(() => { Wave.n = 4; OBJ.seen = true; beginStation(); }) },
+    { pos:R(2), label:'2.3  THE CAREER COUNSELOR  (boss)', act:run(() => { Wave.n = 4; OBJ.seen = true; retryBoss(); }) },
+    { pos:R(3), label:'2.4  INSIDE THE STATION  (ticket, trains)', act:run(() => { Wave.n = 4; OBJ.seen = true; OBJ.phase = 'ticket'; startScene(stationInteriorScript); }) },
+    { pos:R3(0), label:'3.1  THE TRAIN - CAR 1  (brawler)', act:run(() => { Wave.n = 4; OBJ.seen = true; startTrain(0); }) },
+    { pos:R3(1), label:'3.2  THE TRAIN - CAR 2', act:run(() => { Wave.n = 4; OBJ.seen = true; startTrain(1); }) },
+    { pos:R3(2), label:'3.3  THE TRAIN - CAR 3', act:run(() => { Wave.n = 4; OBJ.seen = true; startTrain(2); }) },
+    { pos:[330, 462, 300], label:'BACK', act:() => { state = 'menu'; menuIdx = 0; } } ];
 }
 function menuNav(){
   const items = state === 'options' ? optionRows() : state === 'skills' ? skillRows() : (state === 'menu' || state === 'paused' || state === 'dead' || state === 'chapters') ? menuItems() : [];
@@ -1416,9 +1426,8 @@ function drawMenus(){
     HT('W/S or mouse to choose  -  ENTER to select', 62, DH-18, 13, '#a3aab8');
   } else if (state === 'chapters'){
     HR(0,0,DW,DH,'rgba(18,10,16,.82)'); HT('CHAPTER SELECT', DW/2, 48, 32, '#ffe14a', 'center'); HT('Testing only. Keeps your current skills + level. ESC or BACK to return.', DW/2, 72, 13, '#c9cdd6', 'center');
-    HT('CHAPTER 1  -  THE MILK RUN', 90, 112, 16, '#8fb4d0'); HT('CHAPTER 2  -  THE NEXT DAY', 90, 366, 16, '#8fb4d0');
-    chapterItems().forEach((it,i) => { const c1 = i < 6, k = c1 ? i : (i < 9 ? i-6 : -1); const bx = 90, by = c1 ? 122+k*34 : (i < 9 ? 376+k*34 : 482), bw = 780;
-      button(bx, by, bw, 30, it.label, i, true, it.act, { size:15 }); });
+    HT('CHAPTER 1  -  THE MILK RUN', 40, 112, 16, '#8fb4d0'); HT('CHAPTER 2  -  THE NEXT DAY', 500, 112, 16, '#8fb4d0'); HT('CHAPTER 3  -  ALL ABOARD  (side-scroller)', 500, 292, 16, '#8fb4d0');
+    chapterItems().forEach((it,i) => button(it.pos[0], it.pos[1], it.pos[2], 30, it.label, i, true, it.act, { size:14 }));
   } else if (state === 'options'){
     HR(0,0,DW,DH,'rgba(18,10,16,.78)'); HT('OPTIONS - CONTROLS', DW/2, 50, 32, '#ffe14a', 'center');
     HT('Click a row, then press the new key or mouse button  (ESC cancels).  Conflicts swap automatically.', DW/2, 74, 13, '#c9cdd6', 'center');
@@ -1520,6 +1529,7 @@ function debugActions(){
     else if (OBJ.phase === 'gohome'){ startHomecoming(); dbgNote('HOMECOMING'); }
     else if (OBJ.phase === 'station'){ P.x = SX; P.z = STA.doorZ + 1; dbgNote('AT THE STATION DOORS'); }
     else if (OBJ.phase === 'boss' && G.boss){ damageEnemy(G.boss, 9999, 0, 1, 0); dbgNote('COUNSELOR DOWN'); }
+    else if (OBJ.phase === 'gostation'){ P.x = SX; P.z = STA.doorZ + 1; dbgNote('AT THE STATION DOORS'); }
     else dbgNote('NOTHING TO SKIP HERE');
   }
   if (k(7)){ for (const n of treeNodes()) prog.ranks[n.id] = n.max; applyStats(); saveProgress(); dbgNote('ALL SKILLS MAXED'); }
@@ -1549,6 +1559,11 @@ function render(now){
     drawIntroScene(lctx); quantize(lctx, LW, LH); blit(); drawIntroHUD(); return;
   }
   if (state === 'dead'){ drawCubicle(lctx, deadT); quantize(lctx, LW, LH); blit(); drawMenus(); return; }
+  if (state === 'train' || (pauseFrom === 'train' && (state === 'paused' || state === 'skills' || state === 'options'))){
+    drawTrain(lctx); quantize(lctx, LW, LH); blit();
+    if (state === 'train') drawTrainHUD(); else { HR(0,0,DW,DH,'rgba(18,10,16,.35)'); drawMenus(); }
+    return;
+  }
   if (state === 'store' || (pauseFrom === 'store' && (state === 'paused' || state === 'skills' || state === 'options'))){
     drawStore(lctx); quantize(lctx, LW, LH); blit();
     if (state === 'store') drawStoreHUD(); else { HR(0,0,DW,DH,'rgba(18,10,16,.35)'); drawMenus(); }
@@ -1593,6 +1608,7 @@ function tick(now){
   if (DBG.on){ debugActions(); if (raw > 0) DBG.fps += (1/raw - DBG.fps)*0.1; DBG.noteT -= raw; }
   if (state === 'intro' || state === 'card') introUpdate(real*(keys.KeyF ? 4 : 1));   // hold F to fast-forward
   else if (state === 'store') updateStore(real);
+  else if (state === 'train') updateTrain(real);
   else {
     if (state === 'play' && pressed.Escape) openPause();
     if (state === 'play'){

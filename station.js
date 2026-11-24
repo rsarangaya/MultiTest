@@ -98,6 +98,10 @@ function spawnRushEnemy(prog){
 }
 /* the rush: no waves. Enemies keep arriving, faster and thicker the closer you get to the station. */
 function updateStation(dt){
+  if (OBJ.phase === 'gostation'){                                          // the fight is over: just walk into the station
+    const dd = Math.hypot(P.x-SX, P.z-STA.doorZ); beacon.visible = dd > 9;
+    if (Math.abs(P.x-SX) < 13 && P.z < -57.5 && P.y < 4) enterStationInside(); return;
+  }
   if (!STA.rush) return;
   STA.t += dt; STA.spawnT -= dt;
   const prog = Math.max(0, Math.min(1, (STA.startZ - P.z)/(STA.startZ - STA.doorZ))), cap = 11 + Math.round(prog*8), rate = 1.0 - 0.5*prog;
@@ -211,15 +215,20 @@ function counselorFan(e, d, nx, nz, n, spread, spd){
 }
 function counselorDefeated(){
   msg('CAREER COUNSELOR DEFEATED!  +200 XP', 3.4, '#3cff8a'); gainXp(200);
-  OBJ.phase = 'chapter2done'; saveProgress();
-  setTimeout(() => { if (OBJ.phase === 'chapter2done') fadeTo(1, 1.2, () => startScene(chapter2EndScript)); }, 3200);
+  OBJ.phase = 'bossdone'; saveProgress();
+  setTimeout(() => { if (OBJ.phase === 'bossdone') fadeTo(1, 0.9, () => backToPlaza()); }, 3000);
 }
-function* chapter2EndScript(){
-  IN.skipFn = () => endScene(() => toTitleMenu());
-  IN.fade = 1; yield A.wait(0.5);
-  yield A.title('END OF CHAPTER 2', 3.0, 'THE TRAIN STATION');
-  yield A.title('TO BE CONTINUED...', 3.2, '');
-  yield A.run(() => { IN.next = () => toTitleMenu(); });
+/* after the Counselor: back out on the plaza in front of the station. Walk in. */
+function backToPlaza(){
+  stationReset(); STA.active = true; STA.rush = false; state = 'play'; pauseFrom = 'play'; IN.on = false; setMood(false);
+  P.maxHp = 100; applyStats(); const hp = Math.max(P.hp, P.maxHp*0.7); resetPlayer(); P.hp = Math.min(P.maxHp, hp + 20 > P.maxHp ? P.maxHp : hp + 20);
+  P.x = SX; P.z = -48; P.y = 0; P.yaw = 0; P.pitch = 0.05; PULL.thrown = false; OBJ.lock = 0; G.tumZ = G.tumX = 0;
+  OBJ.phase = 'gostation'; beacon.position.set(SX, 9, STA.doorZ + 4); beacon.visible = true; saveProgress(); lockPointer();
+  msg('THE WAY IN IS CLEAR.  WALK INTO THE STATION.', 3.4, '#ffe14a'); FADE.a = 1; fadeTo(0, 0.8);
+}
+function enterStationInside(){
+  OBJ.phase = 'ticket'; beacon.visible = false; P.vx = P.vz = 0; atk.state = 'idle'; saveProgress();
+  fadeTo(1, 0.7, () => { startScene(stationInteriorScript); FADE.a = 1; fadeTo(0, 0.7); });
 }
 function toTitleMenu(){ IN.on = false; state = 'menu'; pauseFrom = 'play'; menuIdx = 0; setMood(false); FADE.a = 1; fadeTo(0, 0.9); }
 

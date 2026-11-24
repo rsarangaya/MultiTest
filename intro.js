@@ -181,14 +181,23 @@ function endScene(nextFn){ IN.dlg = null; IN.freeOn = false; IN.nameMode = false
 /* free roam: furniture rectangles [x0,y0,x1,y1] the player cannot walk through */
 const SCENE_ROOMS = {
   kitchen:{ x0:0.5, x1:7.5, y0:0.35, y1:5.65, blocks:[[1.15,0,2.85,0.95],[2.85,0,3.75,0.95],[4.05,0,4.85,0.8],[6.7,0.05,7.8,1.05],[2.75,2.5,4.9,3.9],[1.9,2.85,2.65,3.6],[4.9,2.85,5.65,3.6]] },
-  bed:{ x0:0.5, x1:7.7, y0:0.35, y1:5.65, blocks:[[1.6,0,4.9,2.2],[0,4.7,1.2,6],[6.15,3.7,7.9,3.95],[6.15,5.25,7.9,5.5]] } };
+  bed:{ x0:0.5, x1:7.7, y0:0.35, y1:5.65, blocks:[[1.6,0,4.9,2.2],[0,4.7,1.2,6],[6.15,3.7,7.9,3.95],[6.15,5.25,7.9,5.5]] },
+  station:{ x0:0.5, x1:7.5, y0:0.5, y1:5.65, blocks:[[0,1.6,0.95,3.7],[0.6,4.3,2.4,4.95],[5.6,4.3,7.4,4.95],[6.9,2.7,7.7,3.5]] } };
 function sceneBlocked(x, y){
   const R = SCENE_ROOMS[IN.room], r = 0.2;
   if (x < R.x0 || x > R.x1 || y < R.y0 || y > R.y1) return true;
   for (const b of R.blocks) if (x+r > b[0] && x-r < b[2] && y+r > b[1] && y-r < b[3]) return true;
+  if (IN.room === 'station' && !IN.ticket && y-r < 2.1) return true;                                      // the turnstiles stay shut until you have a ticket
   return false;
 }
 function freeSpots(){
+  if (IN.room === 'station'){
+    const t = IN.ticket;
+    return [ { id:'clerk', x:1.5, y:2.7, r:1.3, label:t ? 'TALK TO THE CLERK' : 'BUY A TICKET' }, { id:'kiosk', x:6.5, y:3.1, r:1.0, label:'TICKET MACHINE' },
+             { id:'gate', x:4.0, y:2.5, r:1.2, label:t ? null : 'TURNSTILES  (NEED A TICKET)' },
+             { id:'t1', x:1.9, y:1.1, r:0.9, label:t ? 'PLATFORM 1:  HR HQ EXPRESS' : null }, { id:'t2', x:4.3, y:1.1, r:0.9, label:t ? 'PLATFORM 2:  NEXTOWN LOCAL' : null },
+             { id:'t3', x:6.7, y:1.1, r:0.9, label:t ? 'PLATFORM 3:  OUT OF SERVICE' : null } ];
+  }
   if (IN.room !== 'kitchen') return [];
   return [ { id:'mom', x:5.3, y:2.2, r:1.6, label:'TALK TO MOM' },
            { id:'wallet', x:4.45, y:1.05, r:1.0, label:IN.walletTaken ? null : 'GRAB WALLET' },
@@ -308,6 +317,83 @@ function* nextDayScript(){
     }
   }
   yield A.run(() => { IN.freeOn = false; IN.next = () => beginStation(); });
+}
+
+/* ---- CHAPTER 2 finale: inside the train station (isometric): buy a ticket, pick the right train ---- */
+let clerkCv = null;
+function drawStationHall(g){
+  floorTiles(g, '#d4d0c8', '#bfc8d4', '#9aa6b4');
+  poly(g,[P2(0,0,0),P2(8,0,0),P2(8,0,WALLH),P2(0,0,WALLH)], '#c3ccd6'); poly(g,[P2(0,0,0),P2(0,6,0),P2(0,6,WALLH),P2(0,0,WALLH)], '#b4becb');
+  wallR(g,0,8,0,10,'#7d8597'); wallL(g,0,6,0,10,'#7d8597'); wallR(g,0,8,WALLH-6,WALLH,'#5a6275'); wallL(g,0,6,WALLH-6,WALLH,'#5a6275');
+  [['1','HR EXPRESS','#b5463f'],['2','NEXTOWN','#2f7a4f'],['3','OUT OF SERVICE','#7d8597']].forEach(([n,lab,col],i) => {                  // three platform doorways in the back wall
+    const x0 = 1.0 + i*2.4;
+    wallR(g,x0-0.12,x0+1.52,0,54,NAVY); wallR(g,x0,x0+1.4,0,52,'#1b1f2e');
+    wallR(g,x0+0.12,x0+1.28,6,46,i === 1 ? '#3f5f82' : '#2c3142'); if (i === 1){ wallR(g,x0+0.22,x0+0.62,26,40,'#bcd6e8'); wallR(g,x0+0.78,x0+1.18,26,40,'#bcd6e8'); wallR(g,x0+0.12,x0+1.28,2,6,'#ffe14a'); }
+    wallR(g,x0-0.12,x0+1.52,56,68,col);
+    const [tx,ty] = P2(x0+0.7,0,62); g.fillStyle = '#fdf6e3'; g.font = 'bold 9px "Courier New",monospace'; g.textAlign = 'center'; g.fillText(n, tx, ty+3); g.font = 'bold 5px "Courier New",monospace'; g.fillText(lab, tx, ty+9); g.textAlign = 'left';
+  });
+  wallL(g,3.9,5.5,30,58,NAVY); wallL(g,4.0,5.4,32,56,'#1b1f2e');                                                                   // departures board on the left wall
+  { const [bx,by] = P2(0,4.7,50); g.fillStyle = '#ffe14a'; g.font = 'bold 5px "Courier New",monospace'; g.fillText('DEPARTURES', bx-14, by-5); g.fillStyle = '#e0a050'; g.fillText('NEXTOWN  09:15', bx-14, by+2); g.fillStyle = '#ff5a4a'; g.fillText('YOUR FUTURE  CXLD', bx-14, by+9); }
+  wallL(g,1.65,3.75,18,52,NAVY); wallL(g,1.75,3.65,22,48,'#bcd6e8'); wallL(g,1.65,3.75,52,62,'#b5463f');                                 // ticket window
+  { const [wx,wy] = P2(0,2.7,57); g.fillStyle = '#fdf6e3'; g.font = 'bold 6px "Courier New",monospace'; g.fillText('TICKETS', wx-9, wy+2); }
+  const list = [];
+  list.push({ k:0.1+2.7+0.5, f:() => {                                                                                                 // clerk behind the glass
+    if (!clerkCv) clerkCv = outlined(paintEnemyRaw('thrower','walk',0)); spr(g, clerkCv, 0.55, 2.7, 0, ISO_SCALE, false);
+    boxC(g,0.05,1.65,0,0.9,2.1,14,'#8f5a3a','#c9a06a'); boxC(g,0.25,2.25,14,0.35,0.5,3,'#e8e6e0'); } });
+  [1.7, 4.1, 6.5].forEach(gx => list.push({ k:gx+1.7+0.5, f:() => { boxC(g,gx,1.7,0,0.5,0.4,12,'#a3aab8'); boxC(g,gx+0.1,1.75,12,0.3,0.25,2,IN.ticket ? '#3cff8a' : '#ff5a4a'); } }));
+  list.push({ k:0.7+4.4+0.5, f:() => { boxC(g,0.7,4.4,0,1.6,0.5,6,'#8f5a3a'); boxC(g,0.7,4.35,6,1.6,0.15,8,'#8f5a3a'); } });
+  list.push({ k:5.7+4.4+0.5, f:() => { boxC(g,5.7,4.4,0,1.6,0.5,6,'#8f5a3a'); boxC(g,5.7,4.35,6,1.6,0.15,8,'#8f5a3a'); } });
+  list.push({ k:7.0+2.9+0.5, f:() => { boxC(g,7.0,2.8,0,0.7,0.7,24,'#b5463f'); boxC(g,7.08,3.46,10,0.5,0.05,8,'#1b1f2e'); boxC(g,7.08,3.46,19,0.5,0.05,4,'#ffe14a'); } });          // broken ticket machine
+  list.push({ k:IN.pl.x+IN.pl.y+0.4, f:() => drawActor(g, IN.pl, CHAR) });
+  list.sort((a,b) => a.k-b.k).forEach(o => o.f());
+}
+function* stationInteriorScript(){
+  const pl = IN.pl;
+  IN.room = 'station'; IN.ticket = false; IN.walletTaken = true; pl.x = 4.2; pl.y = 5.3; pl.z = 0; pl.face = 'ur'; pl.pose = 'stand'; IN.fade = 1; IN.fadeColor = '#000';
+  IN.skipFn = () => endScene(() => startTrain(0));
+  yield A.wait(0.3); yield A.fade(0, 0.8);
+  yield A.say('YOU', 'Okay. A ticket first. Then the train to the next town.');
+  IN.objective = 'BUY A TICKET AT THE WINDOW  (LEFT WALL)';
+  while (true){
+    IN.freePick = null; yield A.free(); const id = IN.freePick;
+    if (id === 'clerk'){
+      yield A.run(() => { pl.face = 'ul'; });
+      if (IN.ticket){ yield A.say('CLERK', 'Platform two. Do not be late. Or early. Be exactly on time.'); continue; }
+      yield A.say('CLERK', 'Welcome to Central Station. How can BizNes Corp help you today?');
+      yield A.say('YOU', 'One ticket to the next town. Please.');
+      yield A.say('CLERK', 'That is 12.99. Plus a platform fee, a convenience fee, and a fee for processing the fees.');
+      yield A.say('YOU', '...How much is that in total?');
+      yield A.say('CLERK', '12.99. The fees are free. We just like saying them.');
+      yield A.say('CLERK', 'Would you like to join BizNes Rewards? Free career coaching!');
+      yield A.say('YOU', 'No. Just the ticket.');
+      yield A.say('CLERK', '...Are you sure? Please say yes.');
+      yield A.say('YOU', 'Just. The ticket.');
+      yield A.run(() => { tone('square', 700, 700, 0.08, 0.14); setTimeout(() => tone('square', 900, 900, 0.1, 0.14), 110); IN.ticket = true; IN.flash = 0.6; });
+      yield A.say('CLERK', '*stamp*  Fine. Platform two, the Nextown Local. Take your ticket.');
+      yield A.say('YOU', 'Thanks.');
+      yield A.run(() => { IN.objective = 'GO THROUGH THE TURNSTILES AND BOARD THE NEXTOWN LOCAL  (PLATFORM 2)'; });
+    } else if (id === 'kiosk'){
+      yield A.run(() => { pl.face = 'dr'; tone('square', 160, 120, 0.2, 0.12); });
+      yield A.say('MACHINE', 'OUT OF ORDER.  PLEASE SEE A HUMAN. (WE DO NOT HAVE ANY.)');
+    } else if (id === 'gate'){
+      yield A.run(() => tone('square', 200, 150, 0.2, 0.12));
+      yield A.say('TURNSTILE', 'BEEP.  TICKET REQUIRED.');
+    } else if (id === 't1'){
+      yield A.say('YOU', 'HR HQ Express. A recruiter in the window is waving at me. Absolutely not.');
+    } else if (id === 't3'){
+      yield A.say('YOU', 'Out of service. A janitor is staring at me. Moving on.');
+    } else if (id === 't2'){
+      yield A.run(() => { pl.face = 'ur'; });
+      yield A.say('YOU', 'Nextown Local. This is the one.');
+      yield A.walk(pl, [[4.3,0.7]], 2.0, 'ur');
+      yield A.run(() => { tone('square', 500, 500, 0.15, 0.14); setTimeout(() => tone('square', 400, 400, 0.25, 0.14), 160); });
+      yield A.fade(1, 0.9, '#000');
+      break;
+    }
+  }
+  yield A.title('END OF CHAPTER 2', 2.6, 'THE TRAIN STATION');
+  yield A.title('CHAPTER 3', 3.0, 'ALL ABOARD');
+  yield A.run(() => { IN.freeOn = false; IN.next = () => startTrain(0); });
 }
 
 /* ============================ control ============================ */
@@ -511,7 +597,7 @@ function drawIntroScene(g){
   if (IN.shake > 0) g.translate((Math.random()-0.5)*6*IN.shake, (Math.random()-0.5)*6*IN.shake);
   g.fillStyle = '#2c3142'; g.fillRect(-10,-10,500,290);
   if (IN.creator) drawCreatorScene(g);
-  else if (IN.room === 'bed') drawBedroom(g); else drawKitchen(g);
+  else if (IN.room === 'bed') drawBedroom(g); else if (IN.room === 'station') drawStationHall(g); else drawKitchen(g);
   if (IN.dark > 0){ g.globalAlpha = IN.dark; g.fillStyle = '#1b1f2e'; g.fillRect(-10,-10,500,290); g.globalAlpha = 1; }
   if (IN.flash > 0){ g.globalAlpha = IN.flash*0.7; g.fillStyle = '#fdf6e3'; g.fillRect(-10,-10,500,290); g.globalAlpha = 1; }
   g.restore();

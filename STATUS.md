@@ -15,8 +15,14 @@ First-person hack & slash (three.js, plain HTML/JS, optional Electron portable e
   E to talk to mom (she sends you to pick up her order in the next town, by train), grab the wallet, take the sword, out the door -> arrival shot -> **Station Road**
   (no waves: a constant rush of recruiters that gets thicker toward the station) -> at the entrance a **first-person cutscene**: tentacles grab you, you are hoisted and dragged
   away, thrown (tumbling camera) into the station hall -> **1v1 vs the Career Counselor** (coffee drops every ~10 s) -> `END OF CHAPTER 2 / TO BE CONTINUED`.
-- Phases (`OBJ.phase`): `arrive goto cut survive open enter (store) home gohome homecoming nextday station pulled boss chapter2done`. Saves/Continue cover all of them
-  (`beginGame(sv)`), and dying in the hall offers CONTINUE which drops you back in the hall (`retryBoss`).
+  Beat the Counselor -> you are back out on the plaza (phase `gostation`): walk into the station -> **isometric station interior** (`stationInteriorScript`, `drawStationHall`): talk to the clerk and buy
+  a ticket (turnstiles stay shut until you have one), the ticket machine is broken, Platform 1 (HR Express) and 3 (out of service) are jokes, Platform 2 = the Nextown Local -> `END OF CHAPTER 2`.
+- **Chapter 3 - all aboard** (`train.js`, state `train`): a **side-scrolling, Street-Fighter-style brawler** inside three train cars (first pass: ends with `TO BE CONTINUED`). One lane, 2D:
+  A/D move, SPACE/W jump, S/C crouch (ducks thrown memos), click/J = 3-hit sword combo (3rd hit is heavy), right-click/K block (a block in the first ~0.2 s is a PARRY and staggers the attacker),
+  Q dash (i-frames), E whirlwind (3.4 s cooldown), air attacks. Each car has scripted waves (they spawn from both screen edges and lock the camera until cleared; "GO >>" unlocks the door).
+  Enemies are the same recruiters (grunt punch, runner lunge, thrower memos you can deflect, Ticket Inspector with armour + baton sweep). Coffee drops, XP, style rank and skill bonuses apply.
+- Phases (`OBJ.phase`): `arrive goto cut survive open enter (store) home gohome homecoming nextday station pulled boss bossdone gostation ticket train chapter3done`. Saves/Continue cover all of them
+  (`beginGame(sv)`): station/boss, plaza (`backToPlaza`), station interior, and the train car you were in (`startTrain(car)`). Dying in the hall or on the train offers CONTINUE.
 
 ## Testing helper
 - **CHAPTER SELECT (TESTING)** on the main menu (`chapterItems()` in `game.js`): jump to 1.1 intro, 1.2 street, 1.3 waves, 1.4 store, 1.5 way home, 1.6 homecoming,
@@ -25,7 +31,7 @@ First-person hack & slash (three.js, plain HTML/JS, optional Electron portable e
 ## Files
 `index.html`, `art.js` (textures, facades incl. the station), `sprites.js` (people, enemies, bosses incl. the Career Counselor), `world.js` (street), `game.js` (logic, HUD,
 menus), `music.js`, `intro.js` (iso scenes: intro, homecoming, next day + free roam), `store.js` (chapter 1 store), `station.js` (chapter 2: Station Road, hall, pull/throw
-cutscene, Career Counselor), `three.min.js`; packaging: `main.js`, `package.json`, `build.js`, `BUILD EXE.bat`, `START HERE.bat`. `deadendtest\` holds an old v2 copy (not used).
+cutscene, Career Counselor, plaza + walk-in), `train.js` (chapter 3 brawler), `three.min.js`; packaging: `main.js`, `package.json`, `build.js`, `BUILD EXE.bat`, `START HERE.bat`. `deadendtest\` holds an old v2 copy (not used).
 Beware: scripts share one global scope, so new helper names must not collide with existing ones (`STA`, `SX`, `AZ`, `PULL`, `FLIP`, `BON`, `ROOF`, `HOME` are taken).
 
 ## How the new pieces work
@@ -45,6 +51,10 @@ Beware: scripts share one global scope, so new helper names must not collide wit
 - **Store** (`store.js`): 16x11 map, 5 guards, recruiter battles HP 30. Door-rattle arm animation, fade transitions in/out (`FADE`/`fadeTo()`).
 - **Mobile (testing build):** taps = clicks; intro, scenes and menus work with on-screen WASD/OK/FAST/SKIP buttons; name entry is a real text box. Street, store and boss
   have no touch controls yet (a MENU button is shown).
+
+## Chapter 3 ideas
+- Boss at the front of the train: **the Middle Manager** (clones with one real one, CC-all blast), then arrival in Nextown and the pickup counter for mom's order.
+- More brawler moves: launcher + juggle, a charged heavy, enemy grabs; a car with a **drink cart** hazard or **passengers** to protect; the same movement-damage idea (speed/combo/style) tuned for 2D.
 
 ## Other boss ideas (not built)
 Each fits the "BizNes Corp ruins a normal errand" tone and reuses the boss framework (`kind:'boss'` + `sub` + a skin + an `update...` function).
