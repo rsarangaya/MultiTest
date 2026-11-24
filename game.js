@@ -823,7 +823,8 @@ let padCd = 0;
 function updatePads(dt){
   padCd -= dt; if (padCd > 0 || P.y > 0.4) return;
   for (const p of PADS) if (Math.abs(P.x-p.x) < 1 && Math.abs(P.z-p.z) < 1){
-    P.vx = p.vx + P.vx*0.3; P.vz = p.vz + P.vz*0.3; P.vy = p.vy; P.onGround = false; P.coyote = 0; P.sliding = false; P.airJumps = 1; padCd = 0.5;
+    P.vx += p.vx*0.6; P.vz += p.vz*0.6; P.vy = p.vy;                    // keep all the momentum you ran in with; the pad adds a lift + a gentle nudge toward its rooftop
+    { const hs = Math.hypot(P.vx,P.vz); if (hs > MAXH){ P.vx *= MAXH/hs; P.vz *= MAXH/hs; } } P.onGround = false; P.coyote = 0; P.sliding = false; P.airJumps = 1; padCd = 0.5;
     tone('square', 300, 900, 0.25, 0.15); burst(p.x, 0.3, p.z, 14, 0xffe14a, 6); G.fovPunch = 1; G.style += 4; break;
   }
 }
