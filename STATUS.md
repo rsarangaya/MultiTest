@@ -37,6 +37,11 @@ First-person hack & slash (three.js, plain HTML/JS, optional Electron portable e
 - **Movement = damage** (`momentumInfo()` in `game.js`, additive, capped at +150%): SPEED (up to +60%), CHARGE (up to +40%, speed straight at the target),
   PLUNGE (up to +50% falling, ground slam scales with fall height), FLIP (+50% for 2.5 s), WALL RUN (+25%), SLIDE (+20%), jump-pad LAUNCH (+40% for 1.6 s),
   COMBO (+2% per hit, max 30%). HUD shows `DAMAGE xN` with the active bonuses; damage numbers turn orange at +100%.
+- **Launcher slash** now sends enemies ~5.5 m up (was ~2.5 m) with floatier gravity; you spring up after them with your air jump ready; every juggle hit re-launches.
+- **Rooftop routes:** 4 trails of 4 tokens, one on the roof each jump pad flings you to (`ROOF`, `updateRoofs()`). Grab all 4 within 9 s: +40 XP, +25 HP,
+  full dash, +30% damage for 8 s. They respawn each wave.
+- **Style rank** adds +10% damage per rank above D and raises the damage cap by the same (S: x2.9 max). **Close call:** dodging an attack (dash/slide/flip i-frames, or
+  just outside its reach at speed) gives +50% damage for 2 s, a dash charge and style.
 
 ## Verified (scripted, in the preview browser)
 - Same walk distance at 30/60/144/240 Hz; intro clock = real time at every rate.

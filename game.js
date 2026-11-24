@@ -180,8 +180,9 @@ const dashRecharge = () => 1.1 - 0.15*rank('footwork');
 /* movement = damage. Every bonus is additive, total capped at +150% (x2.5). Timers count down in update().
    SPEED   up to +60%  (6 -> 18 m/s)        CHARGE  up to +40%  (speed straight AT the target)
    PLUNGE  up to +50%  (falling / ground slam from height)   FLIP  +50% for 2.5 s after a wall flip
-   WALLRUN +25% (while wall-running + 1 s)   SLIDE   +20%     LAUNCH +40% for 1.6 s after a jump pad     COMBO +2% per hit (max +30%) */
-const BON = { flip:0, wall:0, pad:0, slamV:0, slamT:0 };
+   WALLRUN +25% (while wall-running + 1 s)   SLIDE   +20%     LAUNCH +40% for 1.6 s after a jump pad     COMBO +2% per hit (max +30%)
+   CLOSE CALL +50% for 2 s after dodging an attack at speed     ROOFTOP +30% for 8 s after a rooftop route     STYLE +10% per rank above D, and the cap rises by the same */
+const BON = { flip:0, wall:0, pad:0, slamV:0, slamT:0, close:0, roof:0 };
 function momentumInfo(dx, dz){
   const tags = []; let b = 0; const add = (n, v) => { if (v > 0.02){ b += v; tags.push([n, v]); } };
   add('SPEED', 0.6*Math.min(1, Math.max(0, (G.speed-6)/12)));
@@ -192,7 +193,10 @@ function momentumInfo(dx, dz){
   if (P.sliding) add('SLIDE', 0.2);
   if (BON.pad > 0) add('LAUNCH', 0.4);
   add('COMBO', Math.min(0.3, G.combo*0.02));
-  b = Math.min(1.5, b); return { mul:1 + b, bonus:b, tags };
+  if (BON.close > 0) add('CLOSE CALL', 0.5);
+  if (BON.roof > 0) add('ROOFTOP', 0.3);
+  add('STYLE', 0.1*styleRank());
+  b = Math.min(1.5 + 0.1*styleRank(), b); return { mul:1 + b, bonus:b, tags };
 }
 const momentum = () => momentumInfo().mul;
 const styleRank = () => Math.min(4, Math.floor(G.style/20));             // D C B A S
@@ -552,8 +556,9 @@ function doSlash(s){
     const c = (vx*L[0]+vy*L[1]+vz*L[2])/d; if (c < (d < 1.3 ? -0.1 : 0.42)) continue;
     const hd = Math.hypot(vx,vz) || 1, wasAir = e.air; damageEnemy(e, dmg, vx/hd, vz/hd, s.knock); hits++;
     if (hasSkill('launcher') && e.kind !== 'boss' && e.state !== 'dying'){
-      if (wasAir){ e.vy = Math.max(e.vy, 4.5); if (!P.onGround) P.vy = Math.max(P.vy, 2.5); }          // juggle: both of you hang in the air
-      else if (P.pitch > 0.3 || atk.idx === 2){ e.air = true; e.vy = 10.5; G.style += 4; }           // launch
+      if (wasAir){ e.vy = Math.max(e.vy, 7.5); if (!P.onGround) P.vy = Math.max(P.vy, 5); }           // juggle: every hit re-launches them and you hang in the air with them
+      else if (P.pitch > 0.3 || atk.idx === 2){ e.air = true; e.vy = 13.5; G.style += 4;                // launch: ~5.5 m up, ~1.7 s of hang time
+        P.vy = Math.max(P.vy, 9.5); P.onGround = false; P.coyote = 0; P.airJumps = Math.max(P.airJumps, 1); }   // you spring up after them, with your air jump ready
     }
   }
   for (const p of projectiles){
@@ -563,7 +568,16 @@ function doSlash(s){
   }
   if (hits){ G.hitstop = atk.idx === 2 ? 0.09 : 0.055; G.shake = Math.max(G.shake, atk.idx === 2 ? 0.55 : 0.28); G.fovPunch = 0.6; sfx.hit(); }
 }
+/* CLOSE CALL: an attack that would have landed misses you because you were moving (dash / slide / flip i-frames) or you were just outside its reach at speed.
+   Reward: +50% damage for 2 s, a dash charge back, style. */
+let closeCd = 0;
+function closeCall(){
+  if (closeCd > 0 || state !== 'play') return; closeCd = 1.2; BON.close = 2.0; G.style = Math.min(100, G.style + 12); if (P.dashCharges < 2) P.dashCharges++;
+  G.hitstop = Math.max(G.hitstop, 0.05); G.fovPunch = Math.max(G.fovPunch, 0.8); sfx.parry(); msg('CLOSE CALL!  +50% DAMAGE', 1.1, '#8fb4d0');
+}
+const evading = () => G.speed > 7 || P.dashT > 0 || P.sliding || !!P.flip || (!P.onGround && G.speed > 4);
 function hurtPlayer(dmg, sx, sz, enemy){
+  if (P.iframes > 0 && enemy && state === 'play' && (P.dashT > 0 || P.sliding || P.flip)) closeCall();      // dodged it with a dash / slide / flip
   if (P.iframes > 0 || state !== 'play' || DBG.god) return false;
   if (P.blocking){
     if (P.blockT <= 0.22 + 0.06*rank('ironguard')){
@@ -656,7 +670,7 @@ function updateEnemy(e, dt){
   if (e.state === 'spawn'){ e.t += dt; if (e.t >= (e.kind === 'boss' ? 1.6 : 0.7)) e.state = 'chase'; return; }
   if (e.state === 'dying'){ const dur = e.kind === 'boss' ? 1.4 : 0.5; e.t += dt; if (e.y > 0){ e.vy = (e.vy||0) - 22*dt; e.y = Math.max(0, e.y + e.vy*dt); } moveEnemy(e, e.vx*dt, e.vz*dt); e.vx *= Math.pow(0.03,dt); e.vz *= Math.pow(0.03,dt); e.fade = Math.max(0, 1-e.t/dur); if (e.t > dur) removeEnemy(e); return; }
   if (e.air){                                                                      // launched: ballistic, no AI until it lands
-    e.vy -= 22*dt; e.y += e.vy*dt; moveEnemy(e, e.vx*dt*0.3, e.vz*dt*0.3); e.vx *= Math.pow(0.1,dt); e.vz *= Math.pow(0.1,dt);
+    e.vy -= 16*dt; e.y += e.vy*dt; moveEnemy(e, e.vx*dt*0.3, e.vz*dt*0.3); e.vx *= Math.pow(0.1,dt); e.vz *= Math.pow(0.1,dt);
     if (e.y <= 0){ e.y = 0; e.air = false; e.state = 'stagger'; e.stagger = 0.4; e.vx = e.vz = 0; burst(e.x,0.2,e.z,6,0xe8e6e0,3); }
     return;
   }
@@ -665,7 +679,7 @@ function updateEnemy(e, dt){
   e.t += dt;
   if (e.kind === 'grunt'){
     if (e.state === 'chase'){ if (d > 0.95) moveEnemy(e, nx*sp*dt, nz*sp*dt); if (d < 2.3 && e.atkCd <= 0 && dy < 2.2){ e.state = 'windup'; e.t = 0; } }
-    else if (e.state === 'windup'){ if (e.t >= 0.42){ e.state = 'attack'; e.t = 0; if (d < 3.0 && dy < 2.2) hurtPlayer(16, e.x, e.z, e); } }
+    else if (e.state === 'windup'){ if (e.t >= 0.42){ e.state = 'attack'; e.t = 0; if (d < 3.0 && dy < 2.2) hurtPlayer(16, e.x, e.z, e); else if (d < 4.8 && dy < 2.6 && evading()) closeCall(); } }
     else if (e.state === 'attack'){ if (d > 1.0) moveEnemy(e, nx*4*dt, nz*4*dt); if (e.t >= 0.25){ e.state = 'chase'; e.atkCd = 0.6; } }
   } else if (e.kind === 'runner'){
     if (e.state === 'chase'){ if (d > 0.95) moveEnemy(e, nx*sp*dt, nz*sp*dt); if (d < 5 && e.atkCd <= 0 && dy < 2.2){ e.state = 'windup'; e.t = 0; e.lx = nx; e.lz = nz; } }
@@ -673,7 +687,7 @@ function updateEnemy(e, dt){
     else if (e.state === 'lunge'){
       moveEnemy(e, e.lx*11*dt, e.lz*11*dt);
       if (!e.hitDone && d < 1.9 && dy < 2.2){ e.hitDone = true; hurtPlayer(20, e.x, e.z, e); }
-      if (e.t >= 0.3){ e.state = 'chase'; e.atkCd = 0.9; }
+      if (e.t >= 0.3){ e.state = 'chase'; e.atkCd = 0.9; if (!e.hitDone && d < 3.6 && dy < 2.6 && evading()) closeCall(); }
     }
   } else if (e.kind === 'boss'){ updateBoss(e, dt, d, nx, nz, dy);
   } else {   // thrower: an executive that hurls memos
@@ -874,6 +888,26 @@ function updateVending(){
     v.ok = false; v.s.material.map = vendOff; P.hp = Math.min(P.maxHp, P.hp+40); msg('+40 HP   (RESTOCKS NEXT WAVE)', 1.6, '#3cff8a'); tone('square', 400, 800, 0.2, 0.15);
   }
 }
+/* ---------- rooftop routes: a trail of tokens on the roof each jump pad flings you to. Grab them all within 9 s of the first: +40 XP, +25 HP, full dash, +30% damage for 8 s ---------- */
+const ROOF = [ { name:'NORTH', pts:[[-26,11.2,-37],[-21,11.2,-39],[-16,11.2,-37],[-12,11.2,-39]] }, { name:'EAST',  pts:[[37,10.2,-7],[39,10.2,-3],[37,10.2,2],[39,10.2,6]] },
+               { name:'WEST',  pts:[[-37,11.2,-7],[-39,11.2,-3],[-37,11.2,2],[-39,11.2,6]] }, { name:'SOUTH', pts:[[12,9.2,36],[16,9.2,38],[20,9.2,36],[24,9.2,38]] } ];
+function tokenTex(){ const c = mkCanvas(16,16), g = c.getContext('2d'); g.fillStyle = NAVY; g.beginPath(); g.moveTo(8,0); g.lineTo(16,8); g.lineTo(8,16); g.lineTo(0,8); g.fill();
+  g.fillStyle = '#ffe14a'; g.beginPath(); g.moveTo(8,2); g.lineTo(14,8); g.lineTo(8,14); g.lineTo(2,8); g.fill(); g.fillStyle = '#fff6c0'; g.fillRect(6,5,3,3); return makeTex(c,false); }
+const tokenMat = new THREE.SpriteMaterial({ map:tokenTex(), transparent:true, alphaTest:0.4, fog:false });
+for (const r of ROOF){ r.n = 0; r.t = -1; r.tok = r.pts.map(p => { const s = new THREE.Sprite(tokenMat); s.scale.set(1.1,1.1,1); s.position.set(p[0],p[1],p[2]); fx.add(s); return { s, on:true }; }); }
+function restockRoofs(){ for (const r of ROOF){ r.n = 0; r.t = -1; for (const k of r.tok){ k.on = true; k.s.visible = true; } } }
+function updateRoofs(dt){
+  for (const r of ROOF){
+    r.tok.forEach((k,i) => { if (k.on) k.s.position.y = r.pts[i][1] + Math.sin(G.time*3 + i)*0.25; });
+    if (r.t > 0){ r.t -= dt; if (r.t <= 0 && r.n < r.tok.length){ for (const k of r.tok){ k.on = true; k.s.visible = true; } r.n = 0; r.t = -1; msg('ROOFTOP ROUTE RESET', 1, '#a3aab8'); } }
+    for (let i=0;i<r.tok.length;i++){ const k = r.tok[i], p = r.pts[i]; if (!k.on) continue;
+      if (Math.hypot(P.x-p[0], P.z-p[2]) < 1.7 && Math.abs(P.y+0.9 - p[1]) < 2.2){
+        k.on = false; k.s.visible = false; r.n++; if (r.n === 1) r.t = 9; tone('sine', 700+r.n*180, 1100+r.n*200, 0.12, 0.14); burst(p[0], p[1], p[2], 8, 0xffe14a, 4);
+        if (r.n >= r.tok.length){ r.t = -1; BON.roof = 8; gainXp(40); P.hp = Math.min(P.maxHp, P.hp+25); P.dashCharges = 2; G.style = Math.min(100, G.style+25); sfx.wave(); msg('ROOFTOP ROUTE CLEARED!  +30% DAMAGE (8s)', 2.2, '#ffe14a'); }
+        else msg('ROOFTOP '+r.n+'/'+r.tok.length, 0.9, '#ffe14a');
+      } }
+  }
+}
 function restockVending(){ for (const v of VEND){ v.ok = true; v.s.material.map = vendOn; } }
 function startStoreCut(){
   OBJ.phase = 'cut'; OBJ.t = 0; OBJ.arr = undefined; OBJ.r = 0; OBJ.seen = true; beacon.visible = false; signSprite.material.map = closedTex;
@@ -953,7 +987,7 @@ function hasSave(){ try { const s = JSON.parse(localStorage.getItem('deadend_sav
 function saveProgress(){ try { localStorage.setItem('deadend_save', JSON.stringify({ wave:Wave.n, kills:G.kills, prog, phase:OBJ.phase })); } catch(e){} }
 function clearSave(){ try { localStorage.removeItem('deadend_save'); } catch(e){} }
 function startWave(){
-  Wave.n++; Wave.queue = []; restockVending(); P.swUsed = false;
+  Wave.n++; Wave.queue = []; restockVending(); restockRoofs(); P.swUsed = false;
   const n = Wave.n;
   for (let i=0;i<5+n*3;i++) Wave.queue.push('grunt');
   if (n >= 2) for (let i=0;i<n+1;i++) Wave.queue.push('runner');
@@ -988,7 +1022,7 @@ function beginGame(sv, keepProg){
   pauseFrom = 'play';
   OBJ.phase = sv ? ((sv.phase === 'endless' || sv.phase === 'home') ? sv.phase : Wave.n >= 3 ? 'open' : 'survive') : (OBJ.seen ? 'survive' : keepProg ? 'goto' : 'arrive');   // a brand-new run opens on the arrival shot
   beacon.visible = OBJ.phase === 'goto'; signSprite.visible = true; signSprite.material.map = closedTex; if (OBJ.phase === 'open' || OBJ.phase === 'endless'){ signSprite.material.map = openTex; if (OBJ.phase === 'open') openStore(false); }
-  for (const c of coffees){ c.life = 0; c.s.visible = false; } restockVending(); padCd = 0;
+  for (const c of coffees){ c.life = 0; c.s.visible = false; } restockVending(); restockRoofs(); padCd = 0; BON.flip = BON.pad = BON.close = BON.roof = BON.slamT = 0;
   if (!sv && !keepProg) clearSave();
   P.maxHp = 100; applyStats(); resetPlayer(); P.hp = P.maxHp; state = 'play'; lockPointer();
   if (OBJ.phase === 'arrive') startArrive();
@@ -1044,7 +1078,7 @@ function update(dt, real){
     if (OBJ.phase === 'cut' || OBJ.phase === 'enter') updateCut(dt*(keys.KeyF ? 4 : 1)); else { updatePlayer(dt); updateCombat(dt); }
     for (const e of enemies.slice()) updateEnemy(e, dt);
     updateProjectiles(dt); updateParticles(dt); updateCoffee(dt); updatePads(dt); updateVending(); if (OBJ.phase === 'survive' || OBJ.phase === 'endless' || OBJ.phase === 'home') updateWaves(dt);
-    G.time += dt; BON.flip -= dt; BON.pad -= dt; BON.slamT -= dt; if (P.wall.on) BON.wall = 1.0; else BON.wall -= dt;
+    G.time += dt; BON.flip -= dt; BON.pad -= dt; BON.slamT -= dt; BON.close -= dt; BON.roof -= dt; closeCd -= dt; updateRoofs(dt); if (P.wall.on) BON.wall = 1.0; else BON.wall -= dt;
     G.style = Math.max(0, Math.min(100, G.style - dt*(G.speed < 3 && P.onGround ? 10 : 4))); G.comboT -= dt; if (G.comboT <= 0) G.combo = 0; G.vign = Math.max(0, G.vign - dt*1.6);
     for (const m of G.msgs) m.t -= dt; G.msgs = G.msgs.filter(m => m.t > 0);
     for (const n of G.nums) n.t += dt; if (G.nums.length && G.nums[0].t > 0.9) G.nums = G.nums.filter(n => n.t < 0.9);
@@ -1182,6 +1216,7 @@ function drawHUD(){
   if (Wave.state === 'fight') HT('RECRUITERS '+(enemies.length+Wave.queue.length), DW-24, 88, 14, '#8fa66a', 'right');
   else HT('NEXT WAVE IN '+Math.ceil(Math.max(0,Wave.breakT)), DW-24, 88, 14, '#8fb4d0', 'right');
   HT('SKILL POINTS '+prog.points, DW-24, 108, 14, prog.points ? '#ffe14a' : '#a3aab8', 'right');
+  for (const r of ROOF) if (r.t > 0) HT('ROOFTOP '+r.name+'  '+r.n+'/'+r.tok.length+'   '+r.t.toFixed(1)+'s', DW/2, 130, 16, '#ffe14a', 'center');
   const obj = objText(); if (obj) HT(obj, DW/2, 76, 13, (OBJ.phase === 'survive' || OBJ.phase === 'endless') ? '#c9cdd6' : '#ffe14a', 'center');
   box(24,DH-52,200,14,'#2c3142'); HR(24,DH-52,200*Math.min(1,hs/MAXH),14,hs>12?'#ffe14a':'#8fb4d0');
   HT('SPEED '+hs.toFixed(1)+' m/s', 24, DH-62, 14, '#e8e6e0');
