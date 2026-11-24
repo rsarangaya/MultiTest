@@ -50,6 +50,12 @@ let optionsFrom = 'menu', skillsFrom = 'paused';
 const locked = () => document.pointerLockElement === disp;
 function lockPointer(){ try { const r = disp.requestPointerLock(); if (r && r.catch) r.catch(()=>{}); } catch(e){} }
 
+/* browser shortcuts that keep firing by accident while playing (Ctrl+D = bookmark when you hold Ctrl to crouch and press D, Ctrl+S, Ctrl+F, F1, F3...).
+   Blocked everywhere; the game still receives the key. Left alone on purpose: F5 / Ctrl+R (reload), F11 (fullscreen), F12 and Ctrl+Shift+I (dev tools), Ctrl+W/T/N (cannot be blocked). */
+addEventListener('keydown', e => {
+  const k = (e.key || '').toLowerCase();
+  if (((e.ctrlKey || e.metaKey) && !e.shiftKey && 'dsfgpuehjkobl'.includes(k) && k.length === 1) || e.key === 'F1' || e.key === 'F3' || e.key === 'F6' || e.key === 'F7') e.preventDefault();
+}, true);
 addEventListener('keydown', e => {
   if (e.target && e.target.id === 'nm'){ if (e.key === 'Enter'){ e.preventDefault(); nameDoneTouch(); } return; }      // typing in the mobile name box
   if (e.code === 'Backquote' && !capture && !(IN.on && IN.nameMode)){ e.preventDefault(); DBG.on = !DBG.on; return; }

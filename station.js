@@ -102,7 +102,7 @@ function updateStation(dt){
   let alive = 0; for (const e of enemies) if (e.state !== 'dying') alive++;
   if (STA.spawnT <= 0 && alive < cap){ STA.spawnT = rate*(0.7 + Math.random()*0.6); spawnRushEnemy(prog); }
   const dd = Math.hypot(P.x-SX, P.z-STA.doorZ); beacon.visible = OBJ.phase === 'station' && dd > 9;                    // the light beam gets out of your face near the doors
-  if (OBJ.phase === 'station' && dd < STA.doorR && P.y < 3) startPull();
+  if (OBJ.phase === 'station' && Math.abs(P.x-SX) < 13 && P.z < -57.5 && P.y < 4) startPull();       // anywhere along the front of the station (the arch is ~12 m wide)
 }
 
 /* ---------- the entrance: pulled away (first person) and thrown into the hall ---------- */
