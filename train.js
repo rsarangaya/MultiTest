@@ -84,7 +84,7 @@ function trHitEnemy(e, dmg, knock, heavy){
   dmg *= mul; e.hp -= dmg; e.flash = 0.09; trSpark(e.x, 50, '#efe3cf', 6); TR.nums.push({ x:e.x, y:76, v:Math.round(dmg*10), t:0, c: heavy ? '#ffe14a' : '#efe3cf' });
   tp.combo++; tp.comboT = 2.2; G.style = Math.min(100, G.style + 3); G.combo = tp.combo; G.comboT = 2.2;
   const dir = e.x >= tp.x ? 1 : -1;
-  if (e.hp <= 0){ if (e.kind === 'consultant') trBossDown(e); e.st = 'dead'; e.t = 0; e.vx = dir*(knock + 60); G.kills++; gainXp(Math.round(TE[e.kind].xp*(1+styleRank()*0.25))); P.hp = Math.min(P.maxHp, P.hp + 2); if (Math.random() < (e.kind === 'inspector' ? 0.6 : 0.2)) TR.cof.push({ x:e.x, t:0 }); TR.stop = 0.07; TR.shake = 0.4; sfx.hit(); return; }
+  if (e.hp <= 0){ if (e.kind === 'consultant') trBossDown(e); e.st = 'dead'; e.t = 0; e.vx = dir*(knock + 60); G.kills++; gainXp(Math.round(TE[e.kind].xp*(1+styleRank()*0.25))); P.hp = Math.min(P.maxHp, P.hp + 2); if (Math.random() < ({ inspector:0.7, guard:0.5, intern:0.12, consultant:0 }[e.kind] ?? 0.3)) TR.cof.push({ x:e.x, t:0 }); TR.stop = 0.07; TR.shake = 0.4; sfx.hit(); return; }
   if (hasSkill('launcher') && (heavy || e.air) && e.kind !== 'consultant'){ e.air = true; e.vy = e.y > 4 ? Math.max(e.vy, 190) : 330; e.vx = dir*(e.y > 4 ? 40 : 90); e.st = 'stagger'; e.t = 0; e.hit = false; if (!tp.air && tp.y <= 0 && !e.wasAir){ e.wasAir = true; msg('LAUNCH!', 0.6, '#ffe14a'); } TR.stop = 0.07; TR.shake = Math.max(TR.shake, 0.3); sfx.hit(); return; }   // LAUNCHER skill: heavy hits send them up; hit them again to juggle
   if ((e.kind === 'inspector' || e.kind === 'consultant') && !heavy){ e.vx += dir*(e.kind === 'consultant' ? 12 : 30); sfx.hit(); TR.stop = 0.03; return; }                     // elite: light hits do not stagger him
   e.st = 'stagger'; e.t = 0; e.vx = dir*knock; e.hit = false; TR.stop = heavy ? 0.08 : 0.045; TR.shake = Math.max(TR.shake, heavy ? 0.4 : 0.15); sfx.hit();
@@ -140,6 +140,8 @@ function trUpdateEnemy(e, dt){
 /* ---------- the Efficiency Consultant (boss): pink slips (jump / crouch), a warp-behind-you snip, a slam with floor shockwaves; at 75/50/25% HP he DOWNSIZES the car (bulkheads close in) ---------- */
 function trUpdateConsultant(e, dt){
   const tp = TR.tp, dx = tp.x - e.x, d = Math.abs(dx), dir = dx >= 0 ? 1 : -1, sp = TE.consultant.spd*(1 + e.phase*0.14), ph = e.phase;
+  e.coffeeT = (e.coffeeT === undefined ? 8 : e.coffeeT) - dt;
+  if (e.coffeeT <= 0 && e.st !== 'dead'){ e.coffeeT = 9; if (TR.arenaL !== null) TR.cof.push({ x:TR.arenaL + 30 + Math.random()*(TR.arenaR - TR.arenaL - 60), t:0 }); }          // coffee for the player, now and then
   const f = e.hp/e.hpMax, want = f < 0.25 ? 3 : f < 0.5 ? 2 : f < 0.75 ? 1 : 0;
   if (want > e.phase && e.st !== 'phase' && e.st !== 'warp' && e.st !== 'dead'){ e.phaseTo = want; e.st = 'phase'; e.t = 0; e.y = 0; e.d1 = e.d2 = false; e.fade = 1; trSay(e, ['', 'You are redundant.', 'Restructuring!', 'FINAL DOWNSIZING!'][want]); msg('DOWNSIZING!', 1.4, '#ff5a8a'); sfx.wave(); }
   const end = () => { e.st = 'walk'; e.cd = Math.max(0.5, 1.5 - ph*0.3) + Math.random()*0.6; e.t = 0; };
@@ -179,7 +181,7 @@ function trUpdateConsultant(e, dt){
       if (e.t >= 0.3 && !e.d1){ e.d1 = true; const to = e.phaseTo, W = TRN.W;
         if (to === 1) TR.arenaRt = Math.max(TR.arenaLt + 300, TR.arenaR - 70); else if (to === 2) TR.arenaLt = Math.min(TR.arenaRt - 250, TR.arenaL + 70); else { TR.arenaLt = Math.min(TR.arenaRt - 210, TR.arenaL + 45); TR.arenaRt = Math.max(TR.arenaLt + 210, TR.arenaR - 45); }
         sfx.hit(); noise(0.4, 0.35, 120); TR.shake = 0.6; }
-      if (e.t >= 0.9 && !e.d2){ e.d2 = true; const kinds = [[], ['intern','intern'], ['guard','intern'], ['inspector','intern']][e.phaseTo];
+      if (e.t >= 0.9 && !e.d2){ e.d2 = true; for (let i = 0; i < 2; i++) TR.cof.push({ x:TR.arenaLt + 40 + Math.random()*(TR.arenaRt - TR.arenaLt - 80), t:0 }); const kinds = [[], ['intern','intern'], ['guard','intern'], ['inspector','intern']][e.phaseTo];
         kinds.forEach((k, i) => trSpawn(k, i % 2 === 0 ? TR.arenaL + 28 + (i>>1)*22 : TR.arenaR - 28 - (i>>1)*22)); }
       if (e.t >= 1.6){ e.phase = e.phaseTo; end(); }
       break; }
@@ -274,7 +276,9 @@ function updateTrain(real){
   car.waves.forEach((w, i) => { if (!TR.spawned[i] && tp.x >= w.x && !trLocked()){ TR.spawned[i] = true; trSpawnWave(w); } });
   if (TR.arenaL !== null){ const oL = TR.arenaL, oR = TR.arenaR; TR.arenaL += (TR.arenaLt - TR.arenaL)*Math.min(1, real*5); TR.arenaR += (TR.arenaRt - TR.arenaR)*Math.min(1, real*5); if (Math.abs(TR.arenaL - oL) + Math.abs(TR.arenaR - oR) > 0.6) TR.shake = Math.max(TR.shake, 0.18); }
   for (const sy of TR.says) sy.t -= real; TR.says = TR.says.filter(sy => sy.t > 0);
-  if (trLocked() && trAlive() === 0){ TR.lockCam = null; TR.arenaL = TR.arenaR = null; const last = TR.spawned.every(Boolean); msg(last ? 'CAR CLEAR!  HEAD FOR THE DOOR  >>' : 'GO!  >>', 1.6, '#3cff8a'); sfx.wave(); }
+  if (trLocked() && trAlive() === 0){ const wasBoss = TR.arenaL !== null; TR.lockCam = null; TR.arenaL = TR.arenaR = null; const last = TR.spawned.every(Boolean);
+    if (!wasBoss) for (let i = 0; i < (last ? 2 : 1); i++) TR.cof.push({ x:Math.max(40, Math.min(TRN.carW - 60, tp.x + (i ? -50 : 55))), t:0 });                  // coffee break between waves
+    msg(last ? 'CAR CLEAR!  HEAD FOR THE DOOR  >>' : 'GO!  >>', 1.6, '#3cff8a'); sfx.wave(); }
   const cleared = TR.spawned.every(Boolean) && !trLocked() && trAlive() === 0;
   if (cleared && tp.x > TRN.carW - 40 && !TR.leaving){
     TR.leaving = true; fadeTo(1, 0.6, () => {

@@ -26,6 +26,8 @@ First-person hack & slash (three.js, plain HTML/JS, optional Electron portable e
   jump-ins and hits from behind get through; a heavy hit breaks the shield for ~2 s). **Boss: THE EFFICIENCY CONSULTANT** (`trUpdateConsultant`, HP 70, ignores light hits): PINK SLIPS (low = jump, mid = crouch),
   a WARP behind you (red marker) into a snip, a SLAM with floor shockwaves (jump them); at 75 / 50 / 25% HP he DOWNSIZES: bulkheads slam in and shrink the arena (452 -> ~234 px) and he calls in
   recruiters while invulnerable. Beating him unlocks the exit -> `TO BE CONTINUED`.
+  **Coffee on the train:** higher drop rates (grunt/runner/thrower 30%, guard 50%, inspector 70%, intern 12%), a free cup after every cleared wave (two after a car's last wave), and in the boss car a
+  cup every ~9 s plus two at each downsizing, so heavy fights can always be healed through.
   **Look:** a train car interior (rounded windows with blinds, adverts, grab rail + swaying straps, continuous bench), scenery that whips past (far skyline, mid buildings, blurred telegraph poles + wires, embankment), tunnels every ~14 s (dark, streaking lights, dimmed car), rail clack sound + a small jolt and sway. Enemies are the same recruiters (grunt punch, runner lunge, thrower memos you can deflect, Ticket Inspector with armour + baton sweep). Coffee drops, XP, style
   rank and skill bonuses apply.
 - Phases (`OBJ.phase`): `arrive goto cut survive open enter (store) home gohome homecoming nextday station pulled boss bossdone gostation ticket train traindone`. Saves/Continue cover all of them
