@@ -406,11 +406,11 @@ function trDrawEnemy(g, e, cam){
   if (e.st === 'windup' && !boss){ g.fillStyle = '#ff5a4a'; g.fillRect(sx - 1, sy - h - 8, 3, 6); g.fillRect(sx - 1, sy - h - 1, 3, 2); }          // "!" telegraph
 }
 function trDrawPlayer(g, tp, cam){
-  const pose = tp.st === 'atk' ? 'reach' : tp.st === 'block' ? 'holdsword' : tp.st === 'spin' ? 'reach' : tp.st === 'jump' || tp.y > 2 ? 'walk0' : tp.crouch ? 'sit' : tp.st === 'walk' || tp.st === 'dash' ? (Math.floor(tp.walkT/0.14)%2 ? 'walk1' : 'walk0') : 'stand';
+  const pose = tp.st === 'atk' ? 'reach' : tp.st === 'block' ? 'holdsword' : tp.st === 'spin' ? 'holdsword' : tp.st === 'jump' || tp.y > 2 ? 'walk0' : tp.crouch ? 'sit' : tp.st === 'walk' || tp.st === 'dash' ? (Math.floor(tp.walkT/0.14)%2 ? 'walk1' : 'walk0') : 'stand';
   const cv = trSprite('player', pose, 0, false), s = 0.98, w = cv.width*s, h = cv.height*s, sx = tp.x - cam, sy = TRN.floorY - tp.y;
   g.fillStyle = 'rgba(0,0,0,.3)'; g.beginPath(); g.ellipse(sx, TRN.floorY + 1, 13 - tp.y*0.05, 3, 0, 0, 6.3); g.fill();
   if (tp.st === 'dash') for (let i=1;i<4;i++){ g.save(); g.globalAlpha = 0.25/i; g.translate(sx - tp.face*i*13, sy); if (tp.face < 0) g.scale(-1,1); g.drawImage(cv, -w/2, -h + 2, w, h); g.restore(); }
-  g.save(); g.translate(sx, sy); if (tp.face < 0) g.scale(-1, 1); if (tp.st === 'spin'){ g.translate(0, -h/2); g.rotate(tp.t*28); g.translate(0, h/2); }
+  g.save(); g.translate(sx, sy); if ((tp.st === 'spin' ? (Math.floor(tp.t*14)%2 ? -tp.face : tp.face) : tp.face) < 0) g.scale(-1, 1);          // whirlwind: the body flicks left/right while the blades sweep round
   g.imageSmoothingEnabled = false; g.globalAlpha = tp.inv > 0 && Math.floor(tp.inv*30)%2 && tp.st !== 'dash' && tp.st !== 'spin' ? 0.45 : 1; g.drawImage(cv, -w/2, -h + 2, w, h);
   if (tp.st === 'hurt'){ g.globalCompositeOperation = 'source-atop'; g.globalAlpha = 0.5; g.drawImage(trSprite('player', pose, 0, true), -w/2, -h + 2, w, h); }
   g.restore();
@@ -418,7 +418,9 @@ function trDrawPlayer(g, tp, cam){
   if (tp.st === 'atk' || tp.st === 'spin'){
     const a = tp.air ? { dur:0.3, hit:0.1, reach:44 } : ATK[tp.idx] || ATK[0], k = Math.min(1, tp.t/(tp.st === 'spin' ? 0.46 : a.dur)), cx = sx + tp.face*(tp.st === 'spin' ? 0 : 14), cy = sy - 42;
     g.save(); g.lineCap = 'round';
-    if (tp.st === 'spin'){ g.globalAlpha = 0.7*(1-k); g.strokeStyle = '#fdf6e3'; g.lineWidth = 6; g.beginPath(); g.ellipse(sx, cy, 52*Math.min(1, k*3), 16, 0, 0, 6.3); g.stroke(); }
+    if (tp.st === 'spin'){ g.globalAlpha = 0.55*(1-k); g.strokeStyle = '#fdf6e3'; g.lineWidth = 6; g.beginPath(); g.ellipse(sx, cy, 54*Math.min(1, k*3), 16, 0, 0, 6.3); g.stroke(); g.globalAlpha = 1;
+      const th = tp.t*30; for (const o of [0, Math.PI]){ const an = th + o, bx = sx + Math.cos(an)*10, by = cy + Math.sin(an)*3, ex = sx + Math.cos(an)*56, ey = cy + Math.sin(an)*16;      // two sword blades sweeping around you
+        g.strokeStyle = NAVY; g.lineWidth = 6; g.beginPath(); g.moveTo(bx, by); g.lineTo(ex, ey); g.stroke(); g.strokeStyle = '#e8e6e0'; g.lineWidth = 3; g.beginPath(); g.moveTo(bx, by); g.lineTo(ex, ey); g.stroke(); g.strokeStyle = '#a3aab8'; g.lineWidth = 1; g.beginPath(); g.moveTo(bx, by); g.lineTo(ex, ey); g.stroke(); } }
     else { const R = a.reach + 6, a0 = (tp.idx === 1 ? 1.0 : -1.2) , sweep = (tp.idx === 1 ? -2.2 : 2.2) * Math.min(1, k*1.8), ang0 = tp.face > 0 ? a0 : Math.PI - a0, dirn = tp.face > 0 ? 1 : -1;
       g.globalAlpha = Math.max(0, 1 - k*0.9); g.strokeStyle = '#fdf6e3'; g.lineWidth = tp.idx === 2 ? 7 : 5; g.beginPath(); g.arc(cx - tp.face*6, cy + 6, R*0.8, ang0, ang0 + dirn*sweep, dirn*sweep < 0); g.stroke();
       g.globalAlpha = 1; g.strokeStyle = NAVY; g.lineWidth = 5; const tx = cx + tp.face*(R*0.8)*Math.cos(Math.min(1,k*1.8)*0.8 - 0.6), ty = cy + 4 + Math.sin(k*3 - 1)*14; g.beginPath(); g.moveTo(cx, cy + 6); g.lineTo(tx, ty); g.stroke(); g.strokeStyle = '#e8e6e0'; g.lineWidth = 3; g.beginPath(); g.moveTo(cx, cy + 6); g.lineTo(tx, ty); g.stroke(); }

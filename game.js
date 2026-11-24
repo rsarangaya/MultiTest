@@ -457,9 +457,9 @@ function updateCamera(dt, real){
    to a spot beside (profile) or behind you, looks at you, then eases back. You are drawn as a billboard (screen-plane rotation for flips and the dive,
    a squash-flip for the whirl). It tries other angles in tight spots and stays first person when there is no room. */
 let camPull = 0; const FLIP = { sprite:null, tex:{}, texKey:'', rig:new THREE.PerspectiveCamera(), s:0, hold:0, rot:0 };
-function flipTex(back){
+function flipTex(back){                                                    // the pulled-out character carries the sword (pose 'holdsword', blade up)
   const key = JSON.stringify(CHAR); if (FLIP.texKey !== key){ for (const t in FLIP.tex) FLIP.tex[t].dispose(); FLIP.tex = {}; FLIP.texKey = key; }
-  return FLIP.tex[back ? 'b' : 'f'] || (FLIP.tex[back ? 'b' : 'f'] = makeTex(personCanvas(CHAR, 'stand', back), false));
+  return FLIP.tex[back ? 'b' : 'f'] || (FLIP.tex[back ? 'b' : 'f'] = makeTex(personCanvas(CHAR, 'holdsword', back), false));
 }
 function panCam(real){
   if (P.slamming) FLIP.hold = 0.4; else FLIP.hold = Math.max(0, FLIP.hold - real);
