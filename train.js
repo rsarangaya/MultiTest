@@ -1,6 +1,6 @@
 "use strict";
 /* ============================================================================
-   CHAPTER 3  -  the train.  A side-scrolling brawler (one lane, Street-Fighter-ish) set inside the cars of the Nextown Local.
+   CHAPTER 2 (part 3)  -  the train.  A side-scrolling brawler (one lane, Street-Fighter-ish) set inside the cars of the Nextown Local.
    Move A/D, jump (SPACE / W), crouch (S / C), 3-hit sword combo (click / J), block (right-click / K - a block in the first 0.2 s is a PARRY),
    dash with i-frames (Q), spin special (E, cooldown).  Three cars; each has scripted waves.  Clear a wave to unlock "GO ->".
    Low-res 480x270 like the iso scenes; the HUD is drawn at display res.  Enemies are the same recruiters, redrawn from the same sprites.
@@ -192,15 +192,15 @@ function updateTrain(real){
   if (cleared && tp.x > TRN.carW - 40 && !TR.leaving){
     TR.leaving = true; fadeTo(1, 0.6, () => {
       if (TR.car + 1 < CARS.length){ TR.car++; trSetupCar(false); saveProgress(); FADE.a = 1; fadeTo(0, 0.6); msg(CARS[TR.car].name, 2.2, '#ffe14a'); }
-      else { OBJ.phase = 'chapter3done'; saveProgress(); startScene(chapter3EndScript); }
+      else { OBJ.phase = 'traindone'; saveProgress(); startScene(trainEndScript); }
     });
   }
 }
-function* chapter3EndScript(){
+/* Chapter 2 is NOT over: it ends when you are back home. Next: Nextown, mom's order, the way back (not built yet). */
+function* trainEndScript(){
   IN.skipFn = () => endScene(() => toTitleMenu());
   IN.fade = 1; yield A.wait(0.5);
-  yield A.title('END OF CHAPTER 3', 3.0, 'ALL ABOARD  (FIRST PASS)');
-  yield A.title('TO BE CONTINUED...', 3.2, '');
+  yield A.title('TO BE CONTINUED...', 3.4, 'NEXTOWN AHEAD  -  CHAPTER 2 CONTINUES');
   yield A.run(() => { IN.next = () => toTitleMenu(); });
 }
 

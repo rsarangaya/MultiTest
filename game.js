@@ -1068,7 +1068,7 @@ function beginGame(sv, keepProg){
   if (sv && (sv.phase === 'homecoming' || sv.phase === 'nextday')){ Wave.n = sv.wave; G.kills = sv.kills; startNextDay(); return; }                       // saved after chapter 1
   if (sv && sv.phase === 'gostation'){ Wave.n = sv.wave; G.kills = sv.kills; backToPlaza(); return; }
   if (sv && sv.phase === 'ticket'){ Wave.n = sv.wave; G.kills = sv.kills; OBJ.phase = 'ticket'; saveProgress(); startScene(stationInteriorScript); return; }
-  if (sv && sv.phase === 'train'){ Wave.n = sv.wave; G.kills = sv.kills; startTrain(sv.car || 0); return; }
+  if (sv && (sv.phase === 'train' || sv.phase === 'traindone' || sv.phase === 'chapter3done')){ Wave.n = sv.wave; G.kills = sv.kills; startTrain(sv.phase === 'train' ? (sv.car || 0) : 0); return; }
   if (sv && (sv.phase === 'station' || sv.phase === 'boss' || sv.phase === 'bossdone' || sv.phase === 'chapter2done')){ Wave.n = sv.wave; G.kills = sv.kills; if (sv.phase === 'boss') retryBoss(); else beginStation(); return; }   // saved in chapter 2
   Wave.n = sv ? sv.wave : 0; Wave.state = 'break'; Wave.breakT = 2.5; Wave.queue = []; setMood(false);
   pauseFrom = 'play';
@@ -1323,7 +1323,7 @@ function menuItems(){
   if (state === 'dead') return deadT > 1.4 ? [ ...(sv ? [{ label:'CONTINUE', act:() => newGame(true) }] : []), { label:'NEW GAME', act:() => newGame(false) }, { label:'EXIT', act:exitGame } ] : [];
   if (state === 'menu') return [
     { label:'START', act:() => newGame(false) },
-    { label: sv ? (['train'].includes(sv.phase) ? 'CONTINUE  (CHAPTER 3)' : ['homecoming','nextday','station','boss','bossdone','gostation','ticket','chapter2done'].includes(sv.phase) ? 'CONTINUE  (CHAPTER 2)' : 'CONTINUE  (WAVE '+(sv.wave+1)+')') : 'CONTINUE', en:!!sv, act:() => newGame(true) },
+    { label: sv ? (['homecoming','nextday','station','boss','bossdone','gostation','ticket','train','traindone','chapter3done','chapter2done'].includes(sv.phase) ? 'CONTINUE  (CHAPTER 2)' : 'CONTINUE  (WAVE '+(sv.wave+1)+')') : 'CONTINUE', en:!!sv, act:() => newGame(true) },
     { label:'CHAPTER SELECT  (TESTING)', act:() => { state = 'chapters'; menuIdx = 0; } },
     { label:'OPTIONS', act:() => { optionsFrom = 'menu'; state = 'options'; menuIdx = 0; } },
     { label:'EXIT', act:exitGame } ];
@@ -1375,7 +1375,7 @@ function treeNav(items){
 /* ---------- chapter select (testing): jump straight to any part of chapters 1-2, keeping your current level/skills ---------- */
 function chapterItems(){
   const run = (setup, pre) => () => { if (pre) pre(); beginGame(null, true); if (setup) setup(); };
-  const L = (k) => [40, 124 + k*36, 440], R = (k) => [500, 124 + k*36, 430], R3 = (k) => [500, 304 + k*36, 430];
+  const L = (k) => [40, 124 + k*36, 440], R = (k) => [500, 124 + k*36, 430];
   return [
     { pos:L(0), label:'1.1  PROLOGUE + INTRO  (new game)', act:() => newGame(false) },
     { pos:L(1), label:'1.2  STREET: GET TO THE STORE', act:run(null, () => { OBJ.seen = false; }) },
@@ -1387,10 +1387,10 @@ function chapterItems(){
     { pos:R(1), label:'2.2  STATION ROAD  (the rush)', act:run(() => { Wave.n = 4; OBJ.seen = true; beginStation(); }) },
     { pos:R(2), label:'2.3  THE CAREER COUNSELOR  (boss)', act:run(() => { Wave.n = 4; OBJ.seen = true; retryBoss(); }) },
     { pos:R(3), label:'2.4  INSIDE THE STATION  (ticket, trains)', act:run(() => { Wave.n = 4; OBJ.seen = true; OBJ.phase = 'ticket'; startScene(stationInteriorScript); }) },
-    { pos:R3(0), label:'3.1  THE TRAIN - CAR 1  (brawler)', act:run(() => { Wave.n = 4; OBJ.seen = true; startTrain(0); }) },
-    { pos:R3(1), label:'3.2  THE TRAIN - CAR 2', act:run(() => { Wave.n = 4; OBJ.seen = true; startTrain(1); }) },
-    { pos:R3(2), label:'3.3  THE TRAIN - CAR 3', act:run(() => { Wave.n = 4; OBJ.seen = true; startTrain(2); }) },
-    { pos:[330, 462, 300], label:'BACK', act:() => { state = 'menu'; menuIdx = 0; } } ];
+    { pos:R(4), label:'2.5  THE TRAIN - CAR 1  (side-scroller)', act:run(() => { Wave.n = 4; OBJ.seen = true; startTrain(0); }) },
+    { pos:R(5), label:'2.6  THE TRAIN - CAR 2', act:run(() => { Wave.n = 4; OBJ.seen = true; startTrain(1); }) },
+    { pos:R(6), label:'2.7  THE TRAIN - CAR 3', act:run(() => { Wave.n = 4; OBJ.seen = true; startTrain(2); }) },
+    { pos:[330, 470, 300], label:'BACK', act:() => { state = 'menu'; menuIdx = 0; } } ];
 }
 function menuNav(){
   const items = state === 'options' ? optionRows() : state === 'skills' ? skillRows() : (state === 'menu' || state === 'paused' || state === 'dead' || state === 'chapters') ? menuItems() : [];
@@ -1426,7 +1426,7 @@ function drawMenus(){
     HT('W/S or mouse to choose  -  ENTER to select', 62, DH-18, 13, '#a3aab8');
   } else if (state === 'chapters'){
     HR(0,0,DW,DH,'rgba(18,10,16,.82)'); HT('CHAPTER SELECT', DW/2, 48, 32, '#ffe14a', 'center'); HT('Testing only. Keeps your current skills + level. ESC or BACK to return.', DW/2, 72, 13, '#c9cdd6', 'center');
-    HT('CHAPTER 1  -  THE MILK RUN', 40, 112, 16, '#8fb4d0'); HT('CHAPTER 2  -  THE NEXT DAY', 500, 112, 16, '#8fb4d0'); HT('CHAPTER 3  -  ALL ABOARD  (side-scroller)', 500, 292, 16, '#8fb4d0');
+    HT('CHAPTER 1  -  THE MILK RUN', 40, 112, 16, '#8fb4d0'); HT('CHAPTER 2  -  THE NEXT DAY', 500, 112, 16, '#8fb4d0');
     chapterItems().forEach((it,i) => button(it.pos[0], it.pos[1], it.pos[2], 30, it.label, i, true, it.act, { size:14 }));
   } else if (state === 'options'){
     HR(0,0,DW,DH,'rgba(18,10,16,.78)'); HT('OPTIONS - CONTROLS', DW/2, 50, 32, '#ffe14a', 'center');

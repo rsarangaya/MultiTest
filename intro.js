@@ -391,8 +391,7 @@ function* stationInteriorScript(){
       break;
     }
   }
-  yield A.title('END OF CHAPTER 2', 2.6, 'THE TRAIN STATION');
-  yield A.title('CHAPTER 3', 3.0, 'ALL ABOARD');
+  yield A.title('ALL ABOARD', 2.6, 'THE NEXTOWN LOCAL');
   yield A.run(() => { IN.freeOn = false; IN.next = () => startTrain(0); });
 }
 
