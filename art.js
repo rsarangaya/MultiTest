@@ -87,7 +87,31 @@ function paintWindow(g,x,y,w,h,ac){
   px(g,x-3,y+h+2,w+6,3,'#a3aab8'); px(g,x-3,y+h+5,w+6,1,NAVY);
   if (ac){ px(g,x+w-22,y-14,24,16,NAVY); px(g,x+w-21,y-13,22,14,'#c9cdd6'); px(g,x+w-17,y-11,10,10,'#5a6275'); px(g,x+w-5,y-10,4,8,'#a3aab8'); }
 }
+function paintStationFront(wm, hm){                                      // the train station: wide hall, big arched entrance, clock, departures sign
+  _s = 4711; const W = Math.round(wm*16), H = Math.round(hm*16), c = mkCanvas(W,H), g = c.getContext('2d'), cx = Math.floor(W/2);
+  px(g,0,0,W,H,'#c3ccd6'); speckle(g,W,H,['#9aa6b4','#b4becb','#d9dfe6'],W*2);
+  px(g,0,0,W,10,'#5a6275'); px(g,0,10,W,2,NAVY); px(g,0,H-18,W,18,'#7d8597'); px(g,0,H-18,W,2,NAVY);
+  for (let x=0;x<W;x+=44) px(g,x,12,3,H-30,'#aab4c2');                                                // pilasters
+  const n = Math.floor(W/90); for (let i=0;i<n;i++){ const x = Math.floor((i+0.5)*W/n)-20; if (Math.abs(x+20-cx) < 140) continue; paintWindow(g, x, 80, 40, 60, false); paintWindow(g, x, 170, 40, 60, false); }
+  const aw = 190, ay = H-18-150;                                                                          // arched entrance (dark inside, lit signs)
+  px(g,cx-aw/2-8,ay-8,aw+16,H-18-ay+8,NAVY); g.fillStyle = NAVY; g.beginPath(); g.arc(cx,ay,aw/2+8,Math.PI,0); g.fill();
+  g.fillStyle = '#1b1f2e'; g.fillRect(cx-aw/2,ay,aw,H-18-ay); g.beginPath(); g.arc(cx,ay,aw/2,Math.PI,0); g.fill();
+  g.fillStyle = '#ffe14a'; for (let i=0;i<7;i++) g.fillRect(cx-aw/2+10+i*26,ay-aw/2+10+Math.abs(i-3)*14,10,5);          // string of lights along the arch
+  g.fillStyle = '#2c3142'; g.fillRect(cx-aw/2+10,H-18-26,aw-20,26); for (let i=0;i<5;i++){ g.fillStyle = '#a3aab8'; g.fillRect(cx-aw/2+20+i*34,H-18-24,8,22); }   // turnstiles in the dark
+  g.fillStyle = '#e0a050'; g.fillRect(cx-6,ay+10,12,30); g.fillStyle = '#b5463f'; g.fillRect(cx-5,ay+12,10,4);                                       // a hanging lamp
+  const sw = 340, sy = 14; px(g,cx-sw/2-4,sy-4,sw+8,56,NAVY); px(g,cx-sw/2,sy,sw,48,'#2f7a4f'); px(g,cx-sw/2,sy,sw,4,'#3cff8a');
+  g.textAlign = 'center'; g.textBaseline = 'middle'; g.font = 'bold 30px "Courier New",monospace'; g.fillStyle = '#e8e6e0'; g.fillText('CENTRAL STATION', cx, sy+22);
+  g.font = 'bold 11px "Courier New",monospace'; g.fillStyle = '#bcd6e8'; g.fillText('ALL TRAINS ON TIME*   (*NOT GUARANTEED)', cx, sy+40);
+  const kx = cx+sw/2+52, ky = sy+24;                                                                      // clock beside the sign
+  g.fillStyle = NAVY; g.beginPath(); g.arc(kx,ky,26,0,6.3); g.fill(); g.fillStyle = '#f4f1ea'; g.beginPath(); g.arc(kx,ky,22,0,6.3); g.fill();
+  g.strokeStyle = NAVY; g.lineWidth = 2; g.beginPath(); g.moveTo(kx,ky); g.lineTo(kx+10,ky-8); g.moveTo(kx,ky); g.lineTo(kx,ky-20); g.stroke();
+  g.font = 'bold 12px "Courier New",monospace'; g.fillStyle = '#b5463f'; g.fillText('JOIN US!  CAREER FAIR TODAY', Math.floor(W*0.17), H-60); g.fillText('SIGN HERE. HERE. HERE.', Math.floor(W*0.83), H-60);
+  px(g,Math.floor(W*0.17)-110,H-90,220,2,NAVY); px(g,Math.floor(W*0.83)-110,H-90,220,2,NAVY);
+  px(g,0,0,1,H,NAVY); px(g,W-1,0,1,H,NAVY); px(g,0,H-1,W,1,NAVY);
+  return makeTex(c,false,true);
+}
 function paintFacade(kind, wm, hm, seedBump){
+  if (kind === 'station') return paintStationFront(wm, hm);
   _s = 97 + kind.length*13 + Math.floor(wm)*7 + (seedBump||0)*101;
   const W = Math.round(wm*16), H = Math.round(hm*16), c = mkCanvas(W,H), g = c.getContext('2d');
   const base = { shutter:'#efe3cf', staffing:'#d9c8a8', cstore:'#e8e6e0', plain:'#c9bba0' }[kind];

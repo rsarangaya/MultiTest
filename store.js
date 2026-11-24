@@ -1,6 +1,6 @@
 "use strict";
 /* ============================================================================
-   STORE  -  chapter 2: inside MOO-MART 24 (isometric stealth).
+   STORE  -  chapter 1 (the milk run): inside MOO-MART 24 (isometric stealth).
    Recruiters patrol with vision cones; shelves block sight. Sneak (C) = quieter + harder
    to spot, run (Shift) = loud. Space from behind = instant takedown. Get spotted = a small
    turn-based battle. Goal: milk from the dairy fridges -> pay at the register -> leave.

@@ -443,7 +443,7 @@ function updateCamera(dt, real){
   G.shake = Math.max(0, G.shake - real*1.4);
   const sh = G.shake*0.12, ox = (Math.random()-0.5)*sh, oy = (Math.random()-0.5)*sh;
   camera.position.set(P.x+ox, P.y + P.eye + bob - P.landDip + oy, P.z);
-  camera.rotation.set(P.pitch, P.yaw+P.spin, P.roll);
+  camera.rotation.set(P.pitch + (G.tumX||0), P.yaw+P.spin, P.roll + (G.tumZ||0));
   camPull = 0; panCam(real);                                                  // flips, ground slam, whirlwind: the camera pans out to show you doing it
 }
 /* pan-out camera for the big moves: wall flip (you tumble), ground slam (you dive head-first), whirlwind (you spin). The camera eases out of your head
@@ -626,19 +626,20 @@ function updateBubble(e, dt){
   if (e.state === 'dying' || e.state === 'spawn'){ dropBubble(e); return; }
   if (e.bubble){ e.bubble.t -= dt; if (e.bubble.t <= 0){ dropBubble(e); e.sayT = e.kind === 'boss' ? 1.5 + Math.random()*2 : 3.5 + Math.random()*4; } return; }
   e.sayT -= dt;
-  if (e.sayT <= 0){ const L = e.kind === 'boss' ? BOSS_LINES : RECRUIT_LINES; showBubble(e, L[Math.floor(Math.random()*L.length)], 2.6); }
+  if (e.sayT <= 0){ const L = e.kind === 'boss' ? (e.sub === 'counselor' ? COUNSELOR_LINES : BOSS_LINES) : RECRUIT_LINES; showBubble(e, L[Math.floor(Math.random()*L.length)], 2.6); }
 }
 const shadowGeo = new THREE.CircleGeometry(0.6, 12);
 function spawnEnemy(kind, at){
-  const boss = kind === 'boss', rad = boss ? 1.0 : 0.45;
+  const boss = kind === 'boss', rad = boss ? 1.0 : 0.45;   // (a boss can wear another skin: see spawnCounselor in station.js)
   let x = 0, z = 0, ok = false;
   if (at && !circleBlocked(at.x, at.z, rad)){ x = at.x; z = at.z; ok = true; }
+  if (STA.active && !ok) return null;                                              // chapter 2 spawns only where it asks (the street's random spawn box is elsewhere)
   for (let i=0;i<30 && !ok;i++){ x = (Math.random()*2-1)*(boss ? 22 : 27); z = (Math.random()*2-1)*(boss ? 22 : 27); ok = Math.hypot(x-P.x, z-P.z) > 14 && !circleBlocked(x,z,rad+0.25); }
   if (!ok) return null;
   const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: enemyTex(kind,'walk',0), transparent:true, alphaTest:0.4 }));
   const shadow = new THREE.Mesh(shadowGeo, new THREE.MeshBasicMaterial({ color:0x000000, transparent:true, opacity:0.35, depthWrite:false }));
   shadow.rotation.x = -Math.PI/2; fx.add(sprite); fx.add(shadow);
-  enemies.push({ kind, x, y:0, z, vx:0, vz:0, hp:ENEMY[kind].hp, state:'spawn', t:0, flash:0, stagger:0, anim:Math.random()*3, atkCd:1+Math.random(), sprite, shadow, hitDone:false, fade:1, sayT:1.5+Math.random()*4, bubble:null,
+  enemies.push({ kind, skin:null, x, y:0, z, vx:0, vz:0, hp:ENEMY[kind].hp, state:'spawn', t:0, flash:0, stagger:0, anim:Math.random()*3, atkCd:1+Math.random(), sprite, shadow, hitDone:false, fade:1, sayT:1.5+Math.random()*4, bubble:null,
                 rad, h: boss ? 5.2 : 2.5, w: boss ? 4.0 : 1.29 });   // the boss is about twice a recruiter's height
   if (boss) shadow.scale.set(2.2,2.2,2.2);
   burst(x,0.3,z,10,0x7d1a2e,3);
@@ -656,7 +657,7 @@ function damageEnemy(e, dmg, dx, dz, knock){
   if (G.nums.length > 40) G.nums.shift();
   if (e.kind === 'boss' && e.hp > 0){ G.combo++; G.comboT = 3.2; return; }          // super armour: no stagger, no knockback
   if (e.hp <= 0){
-    if (e.kind === 'boss'){ msg('HIRING MANAGER DEFEATED!  +150 XP', 3.2, '#3cff8a'); burst(e.x, 2, e.z, 40, 0x6b8650, 10); G.shake = Math.max(G.shake, 0.6); sfx.wave(); knock = 2; }
+    if (e.kind === 'boss'){ if (e.sub === 'counselor') counselorDefeated(); else msg('HIRING MANAGER DEFEATED!  +150 XP', 3.2, '#3cff8a'); burst(e.x, 2, e.z, 40, 0x6b8650, 10); G.shake = Math.max(G.shake, 0.6); sfx.wave(); knock = 2; }
     e.state = 'dying'; e.t = 0; e.vx = dx*knock*1.3; e.vz = dz*knock*1.3; G.kills++; G.combo++; G.comboT = 3.2;
     G.style = Math.min(100, G.style + 12 + (!P.onGround ? 8 : 0) + (P.sliding ? 6 : 0) + ((P.wall.on || P.flip) ? 8 : 0));
     P.hp = Math.min(P.maxHp, P.hp + 2 + (styleRank() >= 3 ? 3 : 0)); gainXp(Math.round(ENEMY[e.kind].xp*(1+styleRank()*0.25)));
@@ -713,7 +714,8 @@ function syncEnemy(e){
   if (e.kind === 'boss'){ fr = Math.floor(e.anim*3)%2;
     st = (e.state === 'slam' || e.state === 'barrage' || (e.state === 'charge' && e.t < 0.55)) ? 'windup' : (e.state === 'grab' || e.state === 'pull' || e.state === 'smack' || e.state === 'charge') ? 'attack' : 'walk';
     if (st !== 'walk') fr = 0; }
-  e.sprite.material.map = enemyTex(e.kind, st, fr, e.flash > 0);
+  if (e.sub === 'counselor'){ st = (e.state === 'quiz' || e.state === 'review' || (e.state === 'jab' && e.t < 0.45)) ? 'windup' : e.state === 'jab' ? 'attack' : 'walk'; if (st !== 'walk') fr = 0; }
+  e.sprite.material.map = enemyTex(e.skin || e.kind, st, fr, e.flash > 0);
   const S = e.state === 'spawn' ? Math.max(0.05, e.t/(e.kind === 'boss' ? 1.6 : 0.7)) : 1, H = e.h*S;
   e.sprite.scale.set(e.w*(e.state==='spawn'?Math.min(1,S*1.5):1), H, 1);
   e.sprite.position.set(e.x, e.y + H/2, e.z);
@@ -741,6 +743,7 @@ function summonRecruiters(e, n){ showBubble(e, 'Calling HR!', 1.8); for (let i=0
 /* abilities: SLAM (ground ring - jump it), GRAB (tentacle reel-in - dash out), BARRAGE (fan of offer letters - deflectable),
    CHARGE (rush), CALL HR (summons recruiters at 66% / 33% health). Parrying his melee staggers him. */
 function updateBoss(e, dt, d, nx, nz, dy){
+  if (e.sub === 'counselor') return updateCounselor(e, dt, d, nx, nz, dy);
   const B = ENEMY.boss, hpF = e.hp/B.hp;
   if (!e.sum1 && hpF < 0.66){ e.sum1 = true; summonRecruiters(e, 3); }
   if (!e.sum2 && hpF < 0.33){ e.sum2 = true; summonRecruiters(e, 4); }
@@ -909,6 +912,18 @@ function updateRoofs(dt){
   }
 }
 function restockVending(){ for (const v of VEND){ v.ok = true; v.s.material.map = vendOn; } }
+/* chapter 1 finale: the way home. After the store, the street fight ends with the Hiring Manager again; then the house (south side) gets a beacon + HOME sign. */
+const HOME = { x:-20, z:27.6, doorZ:29.2 };
+const homeSign = new THREE.Mesh(new THREE.PlaneGeometry(1.8,0.72), new THREE.MeshBasicMaterial({ map:signTex('HOME','SWEET HOME','#2f7a4f'), transparent:true, alphaTest:0.5, fog:true }));
+homeSign.position.set(HOME.x, 1.9, 29.93); homeSign.rotation.y = Math.PI; homeSign.visible = false; scene.add(homeSign);
+function startGoHome(){
+  OBJ.phase = 'gohome'; beacon.position.set(HOME.x, 9, HOME.z); beacon.visible = true; homeSign.visible = true; saveProgress();
+  setTimeout(() => msg('THE HIRING MANAGER FALLS AGAIN.  NOW GET HOME!', 3.4, '#3cff8a'), 1500);
+}
+function startHomecoming(){
+  OBJ.phase = 'homecoming'; beacon.visible = false; P.vx = P.vz = 0; atk.state = 'idle'; saveProgress();
+  fadeTo(1, 0.8, () => { startScene(homecomingScript); FADE.a = 1; fadeTo(0, 0.7); });
+}
 function startStoreCut(){
   OBJ.phase = 'cut'; OBJ.t = 0; OBJ.arr = undefined; OBJ.r = 0; OBJ.seen = true; beacon.visible = false; signSprite.material.map = closedTex;
   for (const e of enemies.slice()) removeEnemy(e);
@@ -971,7 +986,10 @@ function objText(){
   if (OBJ.phase === 'survive') return 'SURVIVE UNTIL THE STORE OPENS AT 9:00 AM     (NOW '+clockText()+')';
   if (OBJ.phase === 'open') return 'THE STORE IS OPEN - GET THE MILK!   ('+dist+'m)';
   if (OBJ.phase === 'endless') return 'KEEP FIGHTING';
-  if (OBJ.phase === 'home') return 'GOT THE MILK - NOW GET HOME   (next chapter coming soon)';
+  if (OBJ.phase === 'home') return 'GOT THE MILK - FIGHT YOUR WAY HOME   (RECRUITERS AHEAD)';
+  if (OBJ.phase === 'station') return 'REACH THE TRAIN STATION   ('+Math.max(0, Math.round(Math.hypot(P.x-SX, P.z-STA.doorZ)))+'m)   -   RECRUITERS EVERYWHERE';
+  if (OBJ.phase === 'boss') return 'DEFEAT THE CAREER COUNSELOR';
+  if (OBJ.phase === 'gohome') return 'HEAD HOME - THE HOUSE IS SOUTH-WEST   ('+Math.round(Math.hypot(P.x-HOME.x, P.z-HOME.z))+'m)';
   return '';
 }
 /* mood swap: 'real' = washed-out street, horror = crimson gig world (palette + fog + sky tint) */
@@ -994,6 +1012,7 @@ function startWave(){
   if (n >= 2) for (let i=0;i<Math.floor(n/2)+1;i++) Wave.queue.push('thrower');
   Wave.bossT = -1;
   if (n === 3 || (n > 3 && n % 5 === 0)){ Wave.queue.length = Math.max(4, Math.floor(Wave.queue.length*0.5)); Wave.bossT = 2.5; }
+  if (OBJ.phase === 'home'){ Wave.queue = []; for (let i=0;i<6;i++) Wave.queue.push('grunt'); for (let i=0;i<2;i++) Wave.queue.push('runner'); Wave.queue.push('thrower'); Wave.bossT = 2.5; }   // the way home: the Hiring Manager again
   Wave.queue.sort(() => Math.random()-0.5); Wave.total = Wave.queue.length + (Wave.bossT > 0 ? 1 : 0); Wave.state = 'fight'; Wave.spawnT = 0.3; setMood(true);
   msg('WAVE '+n+' - RECRUITERS INCOMING', 2.4, '#ffe14a'); sfx.wave();
 }
@@ -1006,22 +1025,27 @@ function updateWaves(dt){
       Wave.state = 'break'; Wave.breakT = 6; setMood(false); P.hp = Math.min(P.maxHp, P.hp+25);
       msg('WAVE CLEARED  +25 HP  +30 XP', 2.8, '#3cff8a'); gainXp(30); saveProgress();
       if (Wave.n >= 3 && OBJ.phase === 'survive') openStore(true);
+      else if (OBJ.phase === 'home') startGoHome();
     }
   } else { Wave.breakT -= dt; if (Wave.breakT <= 0) startWave(); }
 }
 /* from the menu: Continue (skips the intro). New games run the intro, which calls beginGame(null) when it ends. */
 function newGame(cont){ if (!cont){ startIntro(); return; } beginGame(hasSave()); }
 function beginGame(sv, keepProg){
+  STA.active = false; STA.rush = false; PULL.thrown = false; OBJ.lock = 0; G.tumZ = G.tumX = 0; FADE.a = 0; FADE.target = 0; homeSign.visible = false;   // (chapter 2 state off)
   for (const e of enemies.slice()) removeEnemy(e);
   for (const p of projectiles) fx.remove(p.sprite); projectiles.length = 0;
   Object.assign(G, { kills: sv ? sv.kills : 0, combo:0, comboT:0, shake:0, hitstop:0, vign:0, msgs:[], fovPunch:0, nums:[], hits:[], boss:null, style:0 });
   Object.assign(atk, { state:'idle', combo:0, windowT:0, buffer:0, cd:0, hold:0, charging:false, wwCd:0 });
   if (sv && sv.prog){ prog.points = sv.prog.points; prog.level = sv.prog.level||1; prog.xp = sv.prog.xp||0; prog.ranks = migrateProg(sv.prog); }
   else if (!keepProg){ prog.points = 0; prog.level = 1; prog.xp = 0; prog.ranks = {}; }
+  if (sv && (sv.phase === 'homecoming' || sv.phase === 'nextday')){ Wave.n = sv.wave; G.kills = sv.kills; startNextDay(); return; }                       // saved after chapter 1
+  if (sv && (sv.phase === 'station' || sv.phase === 'boss' || sv.phase === 'chapter2done')){ Wave.n = sv.wave; G.kills = sv.kills; if (sv.phase === 'boss') retryBoss(); else beginStation(); return; }   // saved in chapter 2
   Wave.n = sv ? sv.wave : 0; Wave.state = 'break'; Wave.breakT = 2.5; Wave.queue = []; setMood(false);
   pauseFrom = 'play';
-  OBJ.phase = sv ? ((sv.phase === 'endless' || sv.phase === 'home') ? sv.phase : Wave.n >= 3 ? 'open' : 'survive') : (OBJ.seen ? 'survive' : keepProg ? 'goto' : 'arrive');   // a brand-new run opens on the arrival shot
-  beacon.visible = OBJ.phase === 'goto'; signSprite.visible = true; signSprite.material.map = closedTex; if (OBJ.phase === 'open' || OBJ.phase === 'endless'){ signSprite.material.map = openTex; if (OBJ.phase === 'open') openStore(false); }
+  OBJ.phase = sv ? ((sv.phase === 'endless' || sv.phase === 'home' || sv.phase === 'gohome') ? sv.phase : Wave.n >= 3 ? 'open' : 'survive') : (OBJ.seen ? 'survive' : keepProg ? 'goto' : 'arrive');   // a brand-new run opens on the arrival shot
+  if (OBJ.phase === 'gohome'){ beacon.position.set(HOME.x, 9, HOME.z); homeSign.visible = true; }
+  beacon.visible = OBJ.phase === 'goto' || OBJ.phase === 'gohome'; signSprite.visible = true; signSprite.material.map = closedTex; if (OBJ.phase === 'open' || OBJ.phase === 'endless'){ signSprite.material.map = openTex; if (OBJ.phase === 'open') openStore(false); }
   for (const c of coffees){ c.life = 0; c.s.visible = false; } restockVending(); restockRoofs(); padCd = 0; BON.flip = BON.pad = BON.close = BON.roof = BON.slamT = 0;
   if (!sv && !keepProg) clearSave();
   P.maxHp = 100; applyStats(); resetPlayer(); P.hp = P.maxHp; state = 'play'; lockPointer();
@@ -1032,7 +1056,8 @@ function beginGame(sv, keepProg){
    then the camera glides down into your head and you're in first person */
 const ARR = { t:0, stage:0, lineT:0, sprite:null, p0:new THREE.Vector3(), p1:new THREE.Vector3(), q0:new THREE.Quaternion(), q1:new THREE.Quaternion(), white:0 };
 const ARR_LINE = 'Alright. Time to get that milk.';
-function startArrive(){
+function startArrive(line, after){
+  ARR.line = line || ARR_LINE; ARR.after = after || null;
   OBJ.phase = 'arrive'; ARR.t = 0; ARR.stage = 0; ARR.lineT = 0; ARR.white = 1;
   const tex = makeTex(personCanvas(CHAR, 'stand', true), false);                    // you, seen from behind
   if (!ARR.sprite){ ARR.sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map:tex, transparent:true, alphaTest:0.4 })); fx.add(ARR.sprite); }
@@ -1047,18 +1072,19 @@ function updateArrive(dt){
   ARR.t += dt; ARR.white = Math.max(0, 1 - ARR.t/0.7);
   if (ARR.stage === 0){ camera.position.copy(ARR.p0); camera.quaternion.copy(ARR.q0); if (ARR.t > 0.8) ARR.stage = 1; }
   else if (ARR.stage === 1){
-    ARR.lineT += dt; IN.dlg = { who:'YOU', text:ARR_LINE, shown:Math.min(ARR_LINE.length, ARR.lineT*30), shout:false };
-    const done = IN.dlg.shown >= ARR_LINE.length;
+    ARR.lineT += dt; IN.dlg = { who:'YOU', text:ARR.line, shown:Math.min(ARR.line.length, ARR.lineT*30), shout:false };
+    const done = IN.dlg.shown >= ARR.line.length;
     if (pressed.Enter || pressed.Space || pressed.Mouse0){ if (!done) ARR.lineT = 99; else ARR.lineT = 999; }
-    if (done && (ARR.lineT > ARR_LINE.length/30 + 1.6 || ARR.lineT >= 999)){ IN.dlg = null; ARR.stage = 2; ARR.t = 0; }
+    if (done && (ARR.lineT > ARR.line.length/30 + 1.6 || ARR.lineT >= 999)){ IN.dlg = null; ARR.stage = 2; ARR.t = 0; }
   } else {
     const k = Math.min(1, ARR.t/2.4), e = k < 0.5 ? 4*k*k*k : 1 - Math.pow(-2*k+2, 3)/2;   // ease in-out
     camera.position.lerpVectors(ARR.p0, ARR.p1, e); camera.quaternion.copy(ARR.q0).slerp(ARR.q1, e);
     camera.fov = 18 + (settings.fov-18)*e; camera.updateProjectionMatrix();
     ARR.sprite.material.opacity = k < 0.6 ? 1 : Math.max(0, 1-(k-0.6)/0.3);
     if (k >= 1){
-      ARR.sprite.visible = false; P.yaw = 0; P.pitch = 0; P.fov = settings.fov; OBJ.phase = 'goto'; beacon.visible = true;
-      msg('GET TO THE STORE - NOW!', 3.2, '#efe3cf');
+      ARR.sprite.visible = false; P.yaw = 0; P.pitch = 0; P.fov = settings.fov;
+      if (ARR.after){ const f = ARR.after; ARR.after = null; f(); }
+      else { OBJ.phase = 'goto'; beacon.visible = true; msg('GET TO THE STORE - NOW!', 3.2, '#efe3cf'); }
     }
   }
 }
@@ -1074,10 +1100,15 @@ function exitGame(){ try { window.close(); } catch(e){} setTimeout(() => { state
 /* ============================ main update ============================ */
 function update(dt, real){
   if (OBJ.phase === 'arrive'){ updateArrive(real*(keys.KeyF ? 4 : 1)); return; }
+  if (OBJ.phase === 'homecoming'){ updateCamera(dt, real); return; }
+  if (OBJ.phase === 'pulled'){ if (dt > 0){ updatePull(dt); updateParticles(dt); for (const m of G.msgs) m.t -= dt; G.msgs = G.msgs.filter(m => m.t > 0); } updateCamera(dt, real); return; }
+  if (OBJ.lock > 0){ OBJ.lock -= dt; for (const k in keys) keys[k] = false; for (const k in pressed) delete pressed[k]; }          // thrown into the hall: no control until you land
   if (dt > 0){
     if (OBJ.phase === 'cut' || OBJ.phase === 'enter') updateCut(dt*(keys.KeyF ? 4 : 1)); else { updatePlayer(dt); updateCombat(dt); }
     for (const e of enemies.slice()) updateEnemy(e, dt);
     updateProjectiles(dt); updateParticles(dt); updateCoffee(dt); updatePads(dt); updateVending(); if (OBJ.phase === 'survive' || OBJ.phase === 'endless' || OBJ.phase === 'home') updateWaves(dt);
+    if (OBJ.phase === 'station') updateStation(dt);
+    if (PULL.thrown) updateThrow(dt);
     G.time += dt; BON.flip -= dt; BON.pad -= dt; BON.slamT -= dt; BON.close -= dt; BON.roof -= dt; closeCd -= dt; updateRoofs(dt); if (P.wall.on) BON.wall = 1.0; else BON.wall -= dt;
     G.style = Math.max(0, Math.min(100, G.style - dt*(G.speed < 3 && P.onGround ? 10 : 4))); G.comboT -= dt; if (G.comboT <= 0) G.combo = 0; G.vign = Math.max(0, G.vign - dt*1.6);
     for (const m of G.msgs) m.t -= dt; G.msgs = G.msgs.filter(m => m.t > 0);
@@ -1085,8 +1116,9 @@ function update(dt, real){
     for (const h of G.hits) h.t -= dt; if (G.hits.length && G.hits[0].t <= 0) G.hits = G.hits.filter(h => h.t > 0);
     if (Math.hypot(P.x-OBJ.x, P.z-OBJ.z) < 2.8 && P.y < 2){
       if (OBJ.phase === 'goto') startStoreCut();
-      else if (OBJ.phase === 'open') startEnterStore();   // chapter 2: walk in, door animation, fade, inside MOO-MART
+      else if (OBJ.phase === 'open') startEnterStore();   // chapter 1: walk in, door animation, fade, inside MOO-MART
     }
+    if (OBJ.phase === 'gohome' && Math.hypot(P.x-HOME.x, P.z-HOME.z) < 2.8 && P.y < 2) startHomecoming();
   }
   updateCamera(dt, real);
 }
@@ -1138,6 +1170,7 @@ function drawSword(g, hx, hy, a){
 }
 function drawViewmodel(){
   if (P.mant) return;
+  if (OBJ.phase === 'pulled'){ drawTentacles(vctx); return; }
   if (camPull > 0.1) return;                                                  // panned out during a flip: no first-person arm
   if (OBJ.phase === 'cut' || OBJ.phase === 'enter'){ drawDoorHand(vctx); return; }
   const pose = swordPose(), g = vctx;
@@ -1212,9 +1245,13 @@ function drawHUD(){
   box(24,22,280,20,'#2e1520'); HR(24,22,280*P.hp/P.maxHp,20,P.hp<30?'#ff5a4a':'#b5463f'); HR(24,22,280*P.hp/P.maxHp,5,'#e07585');
   HT('HP '+Math.ceil(P.hp), 30, 38, 15, '#fff');
   box(24,52,280,8,'#1f1018'); HR(24,52,280*Math.min(1,prog.xp/xpNeed(prog.level)),8,'#8fb4d0'); HT('LV '+prog.level, 316, 61, 13, '#8fb4d0');
-  HT('WAVE '+Math.max(1,Wave.n), DW-24, 40, 24, '#ffe14a', 'right'); HT('KILLS '+G.kills, DW-24, 66, 16, '#efe3cf', 'right');
-  if (Wave.state === 'fight') HT('RECRUITERS '+(enemies.length+Wave.queue.length), DW-24, 88, 14, '#8fa66a', 'right');
-  else HT('NEXT WAVE IN '+Math.ceil(Math.max(0,Wave.breakT)), DW-24, 88, 14, '#8fb4d0', 'right');
+  const inWaves = OBJ.phase === 'survive' || OBJ.phase === 'endless' || OBJ.phase === 'home';
+  if (inWaves) HT('WAVE '+Math.max(1,Wave.n), DW-24, 40, 24, '#ffe14a', 'right');
+  else HT(OBJ.phase === 'boss' ? 'BOSS FIGHT' : (OBJ.phase === 'station' || OBJ.phase === 'pulled') ? 'STATION ROAD' : OBJ.phase === 'chapter2done' ? 'CHAPTER 2' : 'CHAPTER 1', DW-24, 40, 24, '#ffe14a', 'right');
+  HT('KILLS '+G.kills, DW-24, 66, 16, '#efe3cf', 'right');
+  if (inWaves){ if (Wave.state === 'fight') HT('RECRUITERS '+(enemies.length+Wave.queue.length), DW-24, 88, 14, '#8fa66a', 'right');
+    else HT('NEXT WAVE IN '+Math.ceil(Math.max(0,Wave.breakT)), DW-24, 88, 14, '#8fb4d0', 'right'); }
+  else if (OBJ.phase === 'station') HT('RECRUITERS '+enemies.filter(e => e.state !== 'dying').length, DW-24, 88, 14, '#8fa66a', 'right');
   HT('SKILL POINTS '+prog.points, DW-24, 108, 14, prog.points ? '#ffe14a' : '#a3aab8', 'right');
   for (const r of ROOF) if (r.t > 0) HT('ROOFTOP '+r.name+'  '+r.n+'/'+r.tok.length+'   '+r.t.toFixed(1)+'s', DW/2, 130, 16, '#ffe14a', 'center');
   const obj = objText(); if (obj) HT(obj, DW/2, 76, 13, (OBJ.phase === 'survive' || OBJ.phase === 'endless') ? '#c9cdd6' : '#ffe14a', 'center');
@@ -1244,19 +1281,19 @@ function drawHUD(){
       dctx.globalAlpha = Math.min(1, h.t/0.4); dctx.strokeStyle = NAVY; dctx.lineWidth = 14; dctx.beginPath(); dctx.arc(DW/2, DH/2, 118, a-0.36, a+0.36); dctx.stroke();
       dctx.strokeStyle = '#ff5a4a'; dctx.lineWidth = 8; dctx.beginPath(); dctx.arc(DW/2, DH/2, 118, a-0.33, a+0.33); dctx.stroke(); }
     dctx.globalAlpha = 1; }
-  if (G.boss && G.boss.state !== 'dying'){ const f = Math.max(0, G.boss.hp/ENEMY.boss.hp);
-    HT('THE HIRING MANAGER', DW/2, DH-90, 18, '#ff5a4a', 'center'); box(DW/2-240, DH-80, 480, 14, '#2e1520'); HR(DW/2-240, DH-80, 480*f, 14, '#b5463f'); HR(DW/2-240, DH-80, 480*f, 4, '#e07585'); }
+  if (G.boss && G.boss.state !== 'dying'){ const f = Math.max(0, G.boss.hp/(G.boss.maxHp || ENEMY.boss.hp));
+    HT(G.boss.title || 'THE HIRING MANAGER', DW/2, DH-90, 18, '#ff5a4a', 'center'); box(DW/2-240, DH-80, 480, 14, '#2e1520'); HR(DW/2-240, DH-80, 480*f, 14, '#b5463f'); HR(DW/2-240, DH-80, 480*f, 4, '#e07585'); }
   if (OBJ.phase === 'cut') HT('HOLD F: fast-forward', DW-16, DH-14, 13, keys.KeyF ? '#ffe14a' : '#a3aab8', 'right');
   G.msgs.forEach((m,i) => { dctx.globalAlpha = Math.min(1, m.t/0.5); HT(m.text, DW/2, 120+i*30, i===G.msgs.length-1?26:20, m.color, 'center'); dctx.globalAlpha = 1; });
 }
 
 let menuIdx = 0, uiRects = [];
 function menuItems(){
-  if (state === 'dead') return deadT > 1.4 ? [ { label:'NEW GAME', act:() => newGame(false) }, { label:'EXIT', act:exitGame } ] : [];
   const sv = hasSave();
+  if (state === 'dead') return deadT > 1.4 ? [ ...(sv ? [{ label:'CONTINUE', act:() => newGame(true) }] : []), { label:'NEW GAME', act:() => newGame(false) }, { label:'EXIT', act:exitGame } ] : [];
   if (state === 'menu') return [
     { label:'START', act:() => newGame(false) },
-    { label: sv ? 'CONTINUE  (WAVE '+(sv.wave+1)+')' : 'CONTINUE', en:!!sv, act:() => newGame(true) },
+    { label: sv ? (['homecoming','nextday','station','boss','chapter2done'].includes(sv.phase) ? 'CONTINUE  (CHAPTER 2)' : 'CONTINUE  (WAVE '+(sv.wave+1)+')') : 'CONTINUE', en:!!sv, act:() => newGame(true) },
     { label:'OPTIONS', act:() => { optionsFrom = 'menu'; state = 'options'; menuIdx = 0; } },
     { label:'EXIT', act:exitGame } ];
   return [
@@ -1432,11 +1469,15 @@ function debugActions(){
       for (const e of enemies.slice()) removeEnemy(e); Wave.queue.length = 0; Wave.bossT = -1;
       if (Wave.state === 'break') Wave.breakT = 0.1; dbgNote('WAVE ' + Wave.n + ' SKIPPED');
     } else if (OBJ.phase === 'open'){ startEnterStore(); dbgNote('ENTERING THE STORE'); }
+    else if (OBJ.phase === 'home'){ for (const e of enemies.slice()) removeEnemy(e); Wave.queue.length = 0; Wave.bossT = -1; startGoHome(); dbgNote('SKIPPED TO THE WALK HOME'); }
+    else if (OBJ.phase === 'gohome'){ startHomecoming(); dbgNote('HOMECOMING'); }
+    else if (OBJ.phase === 'station'){ P.x = SX; P.z = STA.doorZ + 1; dbgNote('AT THE STATION DOORS'); }
+    else if (OBJ.phase === 'boss' && G.boss){ damageEnemy(G.boss, 9999, 0, 1, 0); dbgNote('COUNSELOR DOWN'); }
     else dbgNote('NOTHING TO SKIP HERE');
   }
   if (k(7)){ for (const n of treeNodes()) prog.ranks[n.id] = n.max; applyStats(); saveProgress(); dbgNote('ALL SKILLS MAXED'); }
   if (k(8)){ P.hp = P.maxHp; dbgNote('FULL HEAL'); }
-  if (k(9)){ P.x = OBJ.x; P.z = OBJ.z + 2.5; P.y = 0; P.vx = P.vz = P.vy = 0; dbgNote('TELEPORTED TO THE STORE'); }
+  if (k(9)){ if (STA.active){ P.x = SX; P.z = STA.doorZ + 6; P.y = 0; dbgNote('TELEPORTED TO THE STATION DOORS'); } else { P.x = OBJ.x; P.z = OBJ.z + 2.5; P.y = 0; dbgNote('TELEPORTED TO THE STORE'); } P.vx = P.vz = P.vy = 0; }
 }
 function drawDebug(){
   const x = 16, y = 128, w = 300, rows = [

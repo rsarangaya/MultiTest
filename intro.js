@@ -75,6 +75,8 @@ const A = {
   eat: (a, sec) => ({ t:0, update(dt){ this.t += dt; a.pose = Math.floor(this.t/0.45)%2 ? 'eat1' : 'eat0'; IN.food = Math.max(0, 1-this.t/sec);
     if (Math.floor(this.t/0.45) !== Math.floor((this.t-dt)/0.45)) tone('square', 180, 120, 0.05, 0.08); return this.t >= sec; } }),
   until: fn => ({ update(dt){ return fn(dt); } }),
+  title: (txt, sec, sub) => ({ t:0, update(dt){ IN.title = txt; IN.titleSub = sub || ''; IN.titleA = Math.min(1, this.t/0.6, (sec-this.t)/0.6 + 0.0001); this.t += dt; if (this.t >= sec){ IN.title = null; return true; } return false; } }),
+  free: () => ({ update(dt){ return freeStep(dt); } }),     // player-controlled walking in the iso rooms (see freeStep)
 };
 
 /* ============================ the script ============================ */
@@ -164,6 +166,150 @@ function* introScript(){
   yield A.run(() => finishIntro());
 }
 
+/* ============================ later chapters: scenes run on the same iso engine ============================ */
+/* startScene(genFn): run a script generator in the iso rooms (same renderer as the intro). A script ends by setting IN.next (what to start afterwards). */
+function startScene(genFn){
+  Object.assign(IN, { on:true, fade:1, fadeColor:'#000', dark:0, dlg:null, sleep:false, sit:0, food:0, chestOpen:0, doorOpen:0, walletOn:true, shake:0, nameMode:false, creator:false,
+                      creatorDone:true, weaponUI:false, itemFly:null, flash:0, walletTaken:false, weaponTaken:false, card:null, t:0, hubSel:0, click:false, room:'kitchen', milkOn:false,
+                      title:null, freeOn:false, freePick:null, freeLabel:null, orderAsked:false, objective:'', skipFn:null, next:null });
+  IN.pl = mkActor({ x:5.85, y:0.9, face:'dl' }); IN.mom = mkActor({ x:5.3, y:3.2, face:'dl', pose:'sit', vis:false });
+  IN.gen = genFn(); IN.cur = IN.gen.next().value;
+  state = 'intro'; setMood(false); for (const k in keys) keys[k] = false; if (document.exitPointerLock) document.exitPointerLock();
+}
+function endScene(nextFn){ IN.dlg = null; IN.freeOn = false; IN.nameMode = false; IN.gen = (function*(){})(); IN.cur = null; IN.next = nextFn; }   // used by scripts' last step and by ESC (skip)
+
+/* free roam: furniture rectangles [x0,y0,x1,y1] the player cannot walk through */
+const SCENE_ROOMS = {
+  kitchen:{ x0:0.5, x1:7.5, y0:0.35, y1:5.65, blocks:[[1.15,0,2.85,0.95],[2.85,0,3.75,0.95],[4.05,0,4.85,0.8],[6.7,0.05,7.8,1.05],[2.75,2.5,4.9,3.9],[1.9,2.85,2.65,3.6],[4.9,2.85,5.65,3.6]] },
+  bed:{ x0:0.5, x1:7.7, y0:0.35, y1:5.65, blocks:[[1.6,0,4.9,2.2],[0,4.7,1.2,6],[6.15,3.7,7.9,3.95],[6.15,5.25,7.9,5.5]] } };
+function sceneBlocked(x, y){
+  const R = SCENE_ROOMS[IN.room], r = 0.2;
+  if (x < R.x0 || x > R.x1 || y < R.y0 || y > R.y1) return true;
+  for (const b of R.blocks) if (x+r > b[0] && x-r < b[2] && y+r > b[1] && y-r < b[3]) return true;
+  return false;
+}
+function freeSpots(){
+  if (IN.room !== 'kitchen') return [];
+  return [ { id:'mom', x:5.3, y:2.2, r:1.6, label:'TALK TO MOM' },
+           { id:'wallet', x:4.45, y:1.05, r:1.0, label:IN.walletTaken ? null : 'GRAB WALLET' },
+           { id:'chest', x:7.25, y:1.45, r:1.1, label:IN.weaponTaken ? null : 'TAKE YOUR SWORD' },
+           { id:'door', x:5.85, y:0.7, r:1.0, label:'GO OUT' } ];
+}
+function freeStep(dt){
+  const pl = IN.pl; IN.freeOn = true;
+  const f = (keys.KeyW||keys.ArrowUp ? 1 : 0) - (keys.KeyS||keys.ArrowDown ? 1 : 0), sd = (keys.KeyD||keys.ArrowRight ? 1 : 0) - (keys.KeyA||keys.ArrowLeft ? 1 : 0);
+  let mx = -f + sd, my = -f - sd; const l = Math.hypot(mx, my);
+  if (l > 0){
+    mx /= l; my /= l; const sp = 2.4*dt, nx = pl.x + mx*sp, ny = pl.y + my*sp;
+    if (!sceneBlocked(nx, pl.y)) pl.x = nx; if (!sceneBlocked(pl.x, ny)) pl.y = ny;
+    pl.face = Math.abs(mx) > Math.abs(my) ? (mx > 0 ? 'dr' : 'ul') : (my > 0 ? 'dl' : 'ur'); pl.walkT += dt; pl.pose = Math.floor(pl.walkT/0.16)%2 ? 'walk1' : 'walk0';
+  } else pl.pose = 'stand';
+  pl.z += (groundZ(pl.x, pl.y) - pl.z)*Math.min(1, dt*20);
+  if (IN.room === 'bed' && pl.x > 7.45 && pl.y > 3.9 && pl.y < 5.3){ IN.freePick = 'down'; IN.freeOn = false; return true; }          // down the stairwell
+  if (IN.room === 'kitchen' && pl.x < 1.5 && pl.y < 0.95){ IN.freePick = 'up'; IN.freeOn = false; return true; }                         // up the stairs
+  let best = null, bd = 9; IN.freeLabel = null;
+  for (const sp of freeSpots()){ const d = Math.hypot(pl.x-sp.x, pl.y-sp.y); if (sp.label && d < sp.r && d < bd){ best = sp; bd = d; } }
+  if (best) IN.freeLabel = best.label;
+  if (best && (pressed.KeyE || pressed.Enter || pressed.Space || IN.click)){ IN.freePick = best.id; IN.freeOn = false; return true; }
+  return false;
+}
+const goUpstairs = pl => [ A.walk(pl, [[6.0,2.2],[6.0,4.4],[1.5,4.4],[0.75,4.2],[0.75,3.6],[0.75,3.1],[0.75,2.6],[0.75,2.1],[0.75,1.6],[0.75,1.1]], 2.1) ];
+
+/* ---- CHAPTER 1 finale: you get home ---- */
+function* homecomingScript(){
+  const pl = IN.pl, mom = IN.mom;
+  IN.room = 'kitchen'; IN.walletOn = false; IN.chestOpen = 1; IN.food = 0; IN.milkOn = false; IN.fadeColor = '#fdf6e3'; IN.fade = 1;
+  mom.vis = true; mom.x = 5.3; mom.y = 3.2; mom.face = 'dl'; mom.pose = 'sit'; pl.x = 5.85; pl.y = 0.9; pl.z = 0; pl.face = 'dl'; pl.pose = 'stand';
+  IN.skipFn = () => endScene(() => startNextDay());
+  yield A.wait(0.3);
+  yield A.fade(0, 0.9);
+  yield A.run(() => tone('square', 140, 90, 0.25, 0.14));
+  yield A.walk(pl, [[5.85,2.0],[5.3,2.0]], 2.0, 'dl');
+  yield A.wait(0.4);
+  yield A.say('MOM', 'You took forever. Did you get the milk?');
+  yield A.say('YOU', 'Yep.');
+  yield A.run(() => { IN.milkOn = true; tone('triangle', 300, 200, 0.12, 0.12); });
+  yield A.wait(0.5);
+  yield A.say('YOU', "...I'm okay, by the way. Just almost got recruited.");
+  yield A.wait(0.4);
+  yield A.say('MOM', 'Quit being a baby. You lived.');
+  yield A.wait(0.5);
+  yield* goUpstairs(pl);
+  yield A.fade(1, 0.6, '#000');
+  yield A.run(() => { IN.room = 'bed'; pl.x = 7.65; pl.y = 4.6; pl.z = -25; mom.vis = false; });
+  yield A.fade(0, 0.5);
+  yield A.walk(pl, [[6.0,4.6],[5.3,4.6],[5.3,2.8],[3.3,2.8]], 2.0, 'ur');
+  yield A.wait(0.3);
+  yield A.run(() => { pl.vis = false; IN.sit = 1; });
+  yield A.say('', '...What a day.');
+  yield A.run(() => { IN.sit = 0; IN.sleep = true; });
+  yield A.tween(IN, 'dark', 0.6, 2.0);
+  yield A.wait(1.2);
+  yield A.fade(1, 1.2, '#000');
+  yield A.title('END OF CHAPTER 1', 2.6, 'THE MILK RUN');
+  yield A.title('CHAPTER 2', 2.8, 'THE NEXT DAY');
+  yield A.run(() => { IN.next = () => startNextDay(); });
+}
+
+/* ---- CHAPTER 2 opener: wake up, no mirror, walk around, talk to mom, wallet + sword, out the door ---- */
+function startNextDay(){ OBJ.phase = 'nextday'; saveProgress(); startScene(nextDayScript); }
+function* nextDayScript(){
+  const pl = IN.pl, mom = IN.mom;
+  IN.room = 'bed'; IN.sleep = true; IN.dark = 0.5; pl.vis = false; mom.vis = false; IN.walletOn = true; IN.chestOpen = 0; IN.milkOn = false; IN.food = 0.6;
+  IN.skipFn = () => endScene(() => beginStation());
+  yield A.wait(0.6);
+  yield A.fade(0, 1.6);
+  for (let i=0;i<2;i++){ yield A.run(() => tone('square', 880, 880, 0.12, 0.12)); yield A.wait(0.28); }
+  yield A.say('', '...Morning already.');
+  yield A.run(() => { IN.sleep = false; IN.sit = 1; });
+  yield A.tween(IN, 'dark', 0, 1.0);
+  yield A.say('', '...Mom will be downstairs.');
+  yield A.run(() => { IN.sit = 0; pl.vis = true; pl.x = 3.1; pl.y = 2.55; pl.face = 'dl'; pl.pose = 'stand'; });
+  IN.objective = 'GO DOWNSTAIRS AND TALK TO MOM';
+  while (true){
+    IN.freePick = null;
+    yield A.free();
+    const id = IN.freePick;
+    if (id === 'down'){
+      yield A.fade(1, 0.35); yield A.run(() => { IN.room = 'kitchen'; pl.x = 0.75; pl.y = 1.15; pl.z = 54; mom.vis = true; mom.x = 5.3; mom.y = 3.2; mom.pose = 'sit'; mom.face = 'dl'; pl.face = 'dl'; }); yield A.fade(0, 0.35);
+    } else if (id === 'up'){
+      yield A.fade(1, 0.35); yield A.run(() => { IN.room = 'bed'; pl.x = 7.4; pl.y = 4.6; pl.z = -25; pl.face = 'ul'; }); yield A.fade(0, 0.35);
+    } else if (id === 'mom'){
+      yield A.run(() => { pl.face = 'dr'; });
+      if (!IN.orderAsked){
+        yield A.say('MOM', "Oh good, you're up. Since you're going out anyway...");
+        yield A.say('MOM', "My order came in at the pickup counter in the next town. You'll have to take the train.");
+        yield A.say('YOU', '...The train station. That is suit central.');
+        yield A.say('MOM', 'Then do not talk to them. Take your wallet. And your sword.');
+        yield A.run(() => { IN.orderAsked = true; IN.objective = 'GRAB YOUR WALLET AND SWORD, THEN HEAD OUT THE DOOR'; });
+      } else yield A.say('MOM', 'Wallet. Sword. Train station. My order. Go.');
+    } else if (id === 'wallet'){
+      yield A.run(() => { pl.face = 'ul'; }); yield A.pose(pl, 'reach', 0.5);
+      yield A.run(() => { IN.walletOn = false; IN.itemFly = { type:'wallet', t:0, dur:0.7 }; sfx.jump(); }); yield A.wait(0.75);
+      yield A.run(() => { IN.walletTaken = true; IN.itemFly = null; pl.pose = 'stand'; });
+      yield A.say('YOU', 'Wallet. Check.');
+    } else if (id === 'chest'){
+      yield A.run(() => { pl.face = 'ul'; }); yield A.pose(pl, 'reach', 0.4);
+      yield A.tween(IN, 'chestOpen', 1, 0.7);
+      yield A.run(() => { IN.itemFly = { type:'sword', t:0, dur:0.8 }; tone('sine', 400, 900, 0.5, 0.14); });
+      yield A.pose(pl, 'reach', 0.8);
+      yield A.run(() => { IN.itemFly = null; IN.flash = 1; sfx.parry(); IN.weaponTaken = true; });
+      yield A.pose(pl, 'holdsword', 1.6);
+      yield A.run(() => { pl.pose = 'stand'; });
+      yield A.say('YOU', 'Back in my hand. Let us hope I do not need it.');
+    } else if (id === 'door'){
+      if (!IN.orderAsked){ yield A.say('MOM', 'Talk to me first, nerd.'); continue; }
+      if (!IN.walletTaken || !IN.weaponTaken){ yield A.say('MOM', 'WALLET! SWORD! BOTH! GO!', { shout:true }); continue; }
+      yield A.run(() => { pl.face = 'ur'; tone('square', 140, 90, 0.25, 0.14); });
+      yield A.tween(IN, 'doorOpen', 1, 0.9);
+      yield A.say('YOU', 'Train station. Mom, my order, and no suits. Easy.');
+      yield A.fade(1, 0.9, '#fdf6e3');
+      break;
+    }
+  }
+  yield A.run(() => { IN.freeOn = false; IN.next = () => beginStation(); });
+}
+
 /* ============================ control ============================ */
 function startIntro(){
   Object.assign(CHAR, CHAR_DEFAULT);
@@ -213,6 +359,7 @@ function crRandom(){ for (const k in PERSON_COUNTS) CHAR[k] = Math.floor(Math.ra
 
 function introUpdate(dt){
   IN.t += dt; IN.tvT += dt; IN.shake = Math.max(0, IN.shake-dt); IN.flash = Math.max(0, IN.flash-dt*1.5); IN.zz += dt;
+  if (!IN.cur && IN.next){ const f = IN.next; IN.next = null; IN.on = false; f(); return; }          // a later-chapter scene finished: start whatever comes next
   if (state === 'card'){
     const c = IN.card, allIn = 0.35 + (PANELS[c.page].caps.length-1)*CAP_GAP; c.t += dt;
     if (c.t > 0.5 && c.page+1 < PANELS.length && !panelCache[c.page+1]) panelCanvas(c.page+1);   // paint the next still while you read this one
@@ -224,7 +371,7 @@ function introUpdate(dt){
     if (pressed.Escape) skipIntro();
     IN.click = false; return;
   }
-  if (pressed.Escape && !IN.nameMode){ skipIntro(); IN.click = false; return; }
+  if (pressed.Escape && !IN.nameMode){ if (IN.skipFn) IN.skipFn(); else skipIntro(); IN.click = false; return; }
   if (IN.creator && !IN.creatorDone){
     const dv = (pressed.ArrowDown||pressed.KeyS ? 1 : 0) - (pressed.ArrowUp||pressed.KeyW ? 1 : 0);
     if (dv) IN.crRow = (IN.crRow+dv+crRows().length)%crRows().length;
@@ -342,7 +489,8 @@ function drawKitchen(g){
     for (const [lx,ly] of [[2.9,2.7],[4.5,2.7],[2.9,3.5],[4.5,3.5]]) boxC(g,lx,ly,0,0.25,0.25,17,'#8f5a3a');
     boxC(g,2.8,2.6,17,2.0,1.2,3,'#c9a06a','#d9b57a');
     boxC(g,3.3,3.0,20,0.5,0.4,1,'#f4f1ea'); if (IN.food > 0.02) boxC(g,3.4,3.1,21,0.3,0.2,2*IN.food+0.3,'#e0a050');
-    boxC(g,4.1,3.2,20,0.22,0.22,2.5,'#e8e6e0'); } });
+    boxC(g,4.1,3.2,20,0.22,0.22,2.5,'#e8e6e0');
+    if (IN.milkOn){ boxC(g,4.35,2.72,20,0.3,0.3,4.5,'#f4f1ea','#e8e6e0'); boxC(g,4.38,2.75,24.5,0.24,0.24,1.2,'#5f89ab'); } } });
   list.push({ k:2.55+3.5-0.3, f:() => { boxC(g,2.0,2.95,8,0.55,0.55,2,'#8f5a3a'); boxC(g,2.0,2.95,10,0.1,0.55,11,'#8f5a3a'); for (const [lx,ly] of [[2.05,3.0],[2.4,3.35]]) boxC(g,lx,ly,0,0.1,0.1,8,'#5e4f3c'); } });
   list.push({ k:5.55+3.5-0.3, f:() => { boxC(g,5.0,2.95,8,0.55,0.55,2,'#8f5a3a'); boxC(g,5.45,2.95,10,0.1,0.55,11,'#8f5a3a'); for (const [lx,ly] of [[5.05,3.0],[5.4,3.35]]) boxC(g,lx,ly,0,0.1,0.1,8,'#5e4f3c'); } });
   list.push({ k:(IN.pl.x < 1.5 && IN.pl.y < 4.05) ? 5.8-0.5*Math.max(0, Math.min(5, Math.floor((4.05-IN.pl.y)/0.5))) : (IN.pl.x < 1.7 && IN.pl.y < 4.7) ? 1.5+IN.pl.y+0.48 : IN.pl.x+IN.pl.y+0.4, f:() => drawActor(g, IN.pl, CHAR) });   // on the stairs, sort between the steps
@@ -656,6 +804,12 @@ function drawIntroHUD(){
     });
     HT('Click an object  -  or  A/D + ENTER', DW/2, DH-16, 14, '#c9cdd6', 'center');
   }
+  if (IN.freeOn){
+    if (IN.objective){ dctx.font = 'bold 15px "Courier New",monospace'; const w = dctx.measureText(IN.objective).width + 28; HR(16,16,w,34,'rgba(18,10,16,.72)'); HR(16,16,w,3,'#ffe14a'); HT(IN.objective, 28, 39, 15, '#efe3cf'); }
+    if (IN.freeLabel){ const [sx,sy] = P2(IN.pl.x, IN.pl.y, (IN.pl.z||0)+52); HT('E:  '+IN.freeLabel, sx*2, sy*2, 16, '#ffe14a', 'center'); }
+    HT('WASD move   -   E interact   -   ESC skip', DW/2, DH-14, 12, '#a3aab8', 'center');
+  }
+  if (IN.title){ HR(0,0,DW,DH,'rgba(0,0,0,'+(0.0)+')'); dctx.globalAlpha = Math.max(0, IN.titleA||0); HT(IN.title, DW/2, DH/2-4, 44, '#ffe14a', 'center'); if (IN.titleSub) HT(IN.titleSub, DW/2, DH/2+36, 20, '#efe3cf', 'center'); dctx.globalAlpha = 1; }
   if (IN.weaponUI) drawWeaponUI();
   drawDialogue();
 }

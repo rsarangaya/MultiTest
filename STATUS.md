@@ -1,64 +1,72 @@
 # STATUS - The Super Slasher 5000
 
-Updated: 2026-11-21
+Updated: 2026-11-24
 
 ## What it is
 First-person hack & slash (three.js, plain HTML/JS, optional Electron portable exe). Pixel-art look from the *Dead-End Job* opening
 (style reference only). Aliens run the planet through **BizNes Corp**; the player just wants milk. See `README.md` for flow and controls.
 
-## Done
-- Main menu, options (keybinds, sensitivity, FOV, music/sfx), save/continue, debug mode (` key).
-- **Comic prologue:** 6 cached stills with caption boxes (first contact, summit, "...in business", first alien company, 80% takeover,
-  humans hiding). Aliens use the in-game recruiter look (`alienLook` in `intro.js`).
-- Isometric intro (wake up, creator, mom, wallet, weapon chest, door), arrival shot, street waves, Hiring Manager boss.
-- Skill tree (sword), levels, style rank, dash/double jump/slam, coffee + vending healing.
-- Chapter 2: isometric stealth grocery store with turn-based battle (`store.js`).
-- Game-over "hired" cubicle scene. Music (procedural lo-fi). Rename OmniCorp -> **BizNes Corp** everywhere.
-- **Timing fix (this session):** game speed is real elapsed time. Frames longer than 0.1 s are capped; gameplay runs in fixed sub-steps
-  of at most 1/60 s, so movement distance is identical at 30 / 60 / 144 / 240 Hz.
-- **Freeze fix (this session):** root cause was a name clash - the comic helper `burst()` in `intro.js` overwrote the game's particle
-  `burst()`, which threw an error on the first enemy spawn/hit. That error stopped the frame loop. Helper renamed `starBurst`, and
-  `frame()` now catches errors per frame and always re-queues itself (`tick()` holds the real work).
-- **Store polish:** first visit now shows a first-person arm grabbing and rattling the closed door. Entering the open store walks to the door, pulls it
-  (chime), fades to black and fades the store in; leaving walks out the door and fades to the street (`FADE` / `fadeTo()` in `game.js`).
-- **Store difficulty:** map is 16x11 (was 14x10), 5 patrolling guards (faster, longer/wider vision, quicker suspicion, wider look sweeps), recruiter
-  battle HP 30 (was 14) and harder hits. Cashier + gag recruiter live in the bottom-left corner, no patrol route goes near it.
-
-- **Mobile (testing build):** taps act as clicks; the intro and all menus are playable on a phone (on-screen WASD, OK, FAST, SKIP, TAB buttons; name entry
-  via the system prompt). Street and store have no touch controls yet (a MENU button is shown). Touch code is in `game.js` (`IS_TOUCH`, `drawTouchUI`).
-
-- **Pan-out camera (flip, ground slam, whirlwind):** `panCam()` in `game.js`. The first-person camera no longer spins for flips or the whirlwind; it eases out to
-  show you tumbling (flip), diving head-first (slam) or spinning (whirl: front/edge/back squash), then back into the head. Details below.
-- **Front/back flips** are seen from behind and tip end over end (foreshortens, shows the front upside-down, comes round); side flips still roll in the screen plane.
-- **Flip camera:** wall flips no longer spin the first-person camera. The camera eases out to a side (front/back flips) or behind (side flips) view, the
-  character is drawn as a billboard tumbling in the screen plane, then it eases back into the head. Falls back to a closer/other angle in tight spots and
-  stays first person when there is no room (`flipCam()` in `game.js`). The tumbling sprite only uses the `stand` pose for now.
-
-- **Movement = damage** (`momentumInfo()` in `game.js`, additive, capped at +150%): SPEED (up to +60%), CHARGE (up to +40%, speed straight at the target),
-  PLUNGE (up to +50% falling, ground slam scales with fall height), FLIP (+50% for 2.5 s), WALL RUN (+25%), SLIDE (+20%), jump-pad LAUNCH (+40% for 1.6 s),
-  COMBO (+2% per hit, max 30%). HUD shows `DAMAGE xN` with the active bonuses; damage numbers turn orange at +100%.
-- **Launcher slash** now sends enemies ~5.5 m up (was ~2.5 m) with floatier gravity; you spring up after them with your air jump ready; every juggle hit re-launches.
-- **Rooftop routes:** 4 trails of 4 tokens, one on the roof each jump pad flings you to (`ROOF`, `updateRoofs()`). Grab all 4 within 9 s: +40 XP, +25 HP,
-  full dash, +30% damage for 8 s. They respawn each wave.
-- **Style rank** adds +10% damage per rank above D and raises the damage cap by the same (S: x2.9 max). **Close call:** dodging an attack (dash/slide/flip i-frames, or
-  just outside its reach at speed) gives +50% damage for 2 s, a dash charge and style.
-
-## Verified (scripted, in the preview browser)
-- Same walk distance at 30/60/144/240 Hz; intro clock = real time at every rate.
-- 40 s of simulated play with spawns, god mode, boss, attacks: no console errors; about 1.3 ms CPU per frame.
-- All 6 prologue panels rendered and paged through into the intro.
-
-## Not verified
-- Not hand-played with a real mouse / pointer lock; the `.exe` is not rebuilt.
-- Small one-off hitches remain on first use of some content (about 70 ms once mid-fight, about 60 ms on the first death-screen paint). Could be
-  pre-warmed.
-
-## Next / ideas
-- Chapter 3: walk home through another wave (`home` phase is a stub).
-- Other weapons + their trees (chain with grapple, axe, greatsword, gauntlet, crossbows); snipers at higher levels; air combat as an unlock.
-- Pre-warm speech-bubble and death-scene textures to remove the first-use hitches.
+## Story structure
+- **Chapter 1 - the milk run:** comic prologue -> isometric intro (wake up, mirror/creator, mom, wallet, sword, door) -> arrival shot -> street, knock on the closed
+  MOO-MART door -> street waves 1-3 (Hiring Manager boss at wave 3) -> MOO-MART opens: isometric stealth store (`store.js`) -> leave -> **the way home**: street fight
+  ending with the Hiring Manager *again* (phase `home`) -> beacon + HOME sign (phase `gohome`) -> **homecoming cutscene**: mom ("You took forever. Did you get the milk?" ...
+  "Quit being a baby. You lived."), up the stairs, sleep -> `END OF CHAPTER 1`.
+- **Chapter 2 - the next day:** `CHAPTER 2 / THE NEXT DAY`. You wake up and *control* the character in the isometric rooms (no mirror): bedroom -> stairs -> kitchen,
+  E to talk to mom (she sends you to pick up her order in the next town, by train), grab the wallet, take the sword, out the door -> arrival shot -> **Station Road**
+  (no waves: a constant rush of recruiters that gets thicker toward the station) -> at the entrance a **first-person cutscene**: tentacles grab you, you are hoisted and dragged
+  away, thrown (tumbling camera) into the station hall -> **1v1 vs the Career Counselor** (coffee drops every ~10 s) -> `END OF CHAPTER 2 / TO BE CONTINUED`.
+- Phases (`OBJ.phase`): `arrive goto cut survive open enter (store) home gohome homecoming nextday station pulled boss chapter2done`. Saves/Continue cover all of them
+  (`beginGame(sv)`), and dying in the hall offers CONTINUE which drops you back in the hall (`retryBoss`).
 
 ## Files
-`index.html`, `art.js`, `sprites.js`, `world.js`, `game.js`, `music.js`, `intro.js`, `store.js`, `three.min.js`; packaging:
-`main.js`, `package.json`, `build.js`, `BUILD EXE.bat`, `START HERE.bat`. `deadendtest\` holds an old v2 copy (not used).
-Beware: scripts share one global scope, so new helper names must not collide with existing ones.
+`index.html`, `art.js` (textures, facades incl. the station), `sprites.js` (people, enemies, bosses incl. the Career Counselor), `world.js` (street), `game.js` (logic, HUD,
+menus), `music.js`, `intro.js` (iso scenes: intro, homecoming, next day + free roam), `store.js` (chapter 1 store), `station.js` (chapter 2: Station Road, hall, pull/throw
+cutscene, Career Counselor), `three.min.js`; packaging: `main.js`, `package.json`, `build.js`, `BUILD EXE.bat`, `START HERE.bat`. `deadendtest\` holds an old v2 copy (not used).
+Beware: scripts share one global scope, so new helper names must not collide with existing ones (`STA`, `SX`, `AZ`, `PULL`, `FLIP`, `BON`, `ROOF`, `HOME` are taken).
+
+## How the new pieces work
+- **Iso scene runner** (`intro.js`): `startScene(genFn)` runs a generator script (`A.say`, `A.walk`, `A.fade`, `A.title`, `A.free`...). `A.free()` is player-controlled walking
+  (`freeStep`, furniture rectangles in `SCENE_ROOMS`, interaction spots in `freeSpots`). A script ends with `IN.next = fn` (what to start next); ESC runs `IN.skipFn`.
+- **Station map** (`station.js`): lives at x = 500 (street is at the origin) so nothing overlaps; the hall is at z = -300. `beginStation()` -> `updateStation()` (spawner) ->
+  `startPull()/updatePull()/drawTentacles()` -> `enterArena()` + `updateThrow()` -> `spawnCounselor()` / `updateCounselor()`.
+- **Counselor** (`kind:'boss'`, `sub:'counselor'`, skin `counselor`): QUIZ (fan of answer sheets, deflectable), REVIEW (slow ground ring - jump it), RED PEN (three quick stabs),
+  below 50% HP faster + double quiz; COFFEE BREAK every ~10 s drops a cup in the hall. HP 80. Parrying staggers him like the Hiring Manager.
+- **Movement = damage** (`momentumInfo()`, additive, capped at +150%, +10% per style rank): SPEED, CHARGE, PLUNGE, FLIP, WALL RUN, SLIDE, jump-pad LAUNCH, COMBO,
+  CLOSE CALL (dodge at speed), ROOFTOP (route of 4 tokens on the roofs the pads lead to), STYLE. HUD shows `DAMAGE xN` + the active bonuses.
+- **Pan-out camera** (`panCam()`): wall flips (somersault seen from behind / side-flip roll), ground slam (head-first dive) and whirlwind pan out to third person.
+- **Launcher slash** sends enemies ~5.5 m up; you spring after them with your air jump ready.
+- **Store** (`store.js`): 16x11 map, 5 guards, recruiter battles HP 30. Door-rattle arm animation, fade transitions in/out (`FADE`/`fadeTo()`).
+- **Mobile (testing build):** taps = clicks; intro, scenes and menus work with on-screen WASD/OK/FAST/SKIP buttons; name entry is a real text box. Street, store and boss
+  have no touch controls yet (a MENU button is shown).
+
+## Other boss ideas (not built)
+Each fits the "BizNes Corp ruins a normal errand" tone and reuses the boss framework (`kind:'boss'` + `sub` + a skin + an `update...` function).
+- **The Landlord** (chapter 3, apartment block): rent-due timer; floors "evict" (collapse into hazards), throws eviction notices, summons a leaf-blower swarm; hit his
+  "security deposit" glowing weak point after he overextends.
+- **The Middle Manager** (train): fights across train cars; tells you to "loop in" copies of himself (clones with one real one), CC-all email blast fills the screen.
+- **The Compliance Officer**: arena of laser tripwires and form-filling; you can only damage him while you are standing in the "approved" colored squares, which move.
+- **The Gym Franchise Owner**: rooftop muscle-suit boss, dumbbell throws and slams; his membership drones are hit-and-run; vulnerable while "cancelling" (you must interrupt).
+- **The Influencer (Brand Ambassador)**: floating camera drones; any hit gets filmed - if you stay in the spotlight too long you get "cancelled" (debuff). Fight in a mall.
+- **The Customer Service Rep**: hold music zone slows you; "please hold" shield; you win by parrying six scripted lines in a row.
+- **The Tax Auditor**: stamps arena tiles red (audit zones); fire-sale phase where he drops loot you must grab fast.
+- **BizNes Corp CEO** (final): a rocket-chair, several phases, one per earlier boss's move set; ending depends on the optional objectives.
+
+## Done earlier (kept for reference)
+- Main menu, options, save/continue, debug mode (` key; 6 skips the current phase, 9 teleports to the next objective). Timing fix (fixed 1/60 s sub-steps), freeze fix (the
+  `burst()` name clash; `frame()` catches errors per frame), skill tree (sword), levels, style rank, dash/double jump/slam, coffee + vending healing, procedural music,
+  game-over "hired" cubicle scene, rename OmniCorp -> BizNes Corp.
+- Rooftop routes, close call, style-rank scaling, launcher; flip/slam/whirl pan-outs; jump pads keep your momentum.
+
+## Verified (scripted, in the preview browser)
+- Same walk distance at 30/60/144/240 Hz; 40 s of simulated play without console errors.
+- Chapter 1 door + store + leave; homecoming + sleep + next-day free roam with real key presses; Station Road rush; pull/throw into the hall; every Counselor move, phase 2,
+  coffee drop, defeat -> end title -> menu; death in the hall -> Continue -> back in the hall; touch intro + name box. (Headless browser: slow, so timings were checked by state, not feel.)
+
+## Not verified
+- Not hand-played with a real mouse / pointer lock; the `.exe` is not rebuilt. Boss difficulty, rush density and the Counselor's HP are untuned guesses.
+- Small one-off hitches remain on first use of some content (about 70 ms once mid-fight, about 60 ms on the first death-screen paint).
+
+## Next / ideas
+- Chapter 3 (the train ride + next town: pick up mom's order), the Landlord / Middle Manager bosses above.
+- Other weapons + their trees (chain with grapple, axe, greatsword, gauntlet, crossbows); snipers at higher levels; air combat as an unlock.
+- Touch controls for the street/boss; pre-warm speech-bubble and death-scene textures.
