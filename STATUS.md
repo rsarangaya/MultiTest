@@ -34,6 +34,10 @@ First-person hack & slash (three.js, plain HTML/JS, optional Electron portable e
   character is drawn as a billboard tumbling in the screen plane, then it eases back into the head. Falls back to a closer/other angle in tight spots and
   stays first person when there is no room (`flipCam()` in `game.js`). The tumbling sprite only uses the `stand` pose for now.
 
+- **Movement = damage** (`momentumInfo()` in `game.js`, additive, capped at +150%): SPEED (up to +60%), CHARGE (up to +40%, speed straight at the target),
+  PLUNGE (up to +50% falling, ground slam scales with fall height), FLIP (+50% for 2.5 s), WALL RUN (+25%), SLIDE (+20%), jump-pad LAUNCH (+40% for 1.6 s),
+  COMBO (+2% per hit, max 30%). HUD shows `DAMAGE xN` with the active bonuses; damage numbers turn orange at +100%.
+
 ## Verified (scripted, in the preview browser)
 - Same walk distance at 30/60/144/240 Hz; intro clock = real time at every rate.
 - 40 s of simulated play with spawns, god mode, boss, attacks: no console errors; about 1.3 ms CPU per frame.

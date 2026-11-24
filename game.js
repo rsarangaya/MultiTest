@@ -177,7 +177,24 @@ const hasSkill = id => rank(id) > 0;
 const treeNodes = () => TREE[CHAR.weapon] || TREE.sword;
 const dmgMul = () => 1 + 0.12*rank('slash');
 const dashRecharge = () => 1.1 - 0.15*rank('footwork');
-const momentum = () => 1 + Math.min(0.6, Math.max(0, (G.speed-7)/12));   // up to +60% damage at speed
+/* movement = damage. Every bonus is additive, total capped at +150% (x2.5). Timers count down in update().
+   SPEED   up to +60%  (6 -> 18 m/s)        CHARGE  up to +40%  (speed straight AT the target)
+   PLUNGE  up to +50%  (falling / ground slam from height)   FLIP  +50% for 2.5 s after a wall flip
+   WALLRUN +25% (while wall-running + 1 s)   SLIDE   +20%     LAUNCH +40% for 1.6 s after a jump pad     COMBO +2% per hit (max +30%) */
+const BON = { flip:0, wall:0, pad:0, slamV:0, slamT:0 };
+function momentumInfo(dx, dz){
+  const tags = []; let b = 0; const add = (n, v) => { if (v > 0.02){ b += v; tags.push([n, v]); } };
+  add('SPEED', 0.6*Math.min(1, Math.max(0, (G.speed-6)/12)));
+  if (dx || dz) add('CHARGE', 0.4*Math.min(1, Math.max(0, (P.vx*dx + P.vz*dz)/14)));
+  add('PLUNGE', Math.max(0.5*Math.min(1, Math.max(0, (-P.vy-4)/20)), BON.slamT > 0 ? BON.slamV : 0));
+  if (BON.flip > 0) add('FLIP', 0.5);
+  if (BON.wall > 0) add('WALL RUN', 0.25);
+  if (P.sliding) add('SLIDE', 0.2);
+  if (BON.pad > 0) add('LAUNCH', 0.4);
+  add('COMBO', Math.min(0.3, G.combo*0.02));
+  b = Math.min(1.5, b); return { mul:1 + b, bonus:b, tags };
+}
+const momentum = () => momentumInfo().mul;
 const styleRank = () => Math.min(4, Math.floor(G.style/20));             // D C B A S
 function gainXp(n){
   prog.xp += n; let up = 0;
@@ -254,7 +271,7 @@ function startFlip(f, s, fwdX, fwdZ, cy, sy){
   const v = dir === 'front' ? [fwdX,fwdZ] : dir === 'back' ? [-fwdX,-fwdZ] : dir === 'right' ? [cy,-sy] : [-cy,sy];
   P.vx += v[0]*5.5; P.vz += v[1]*5.5; P.vy = Math.min(10, Math.max(P.vy,0) + 3.5);
   const hs = Math.hypot(P.vx,P.vz); if (hs > MAXH){ P.vx *= MAXH/hs; P.vz *= MAXH/hs; }
-  P.flip = { t:0, dur:0.6, dir }; P.wfWin = 0; P.iframes = Math.max(P.iframes, 0.35); G.fovPunch = 1; sfx.dash();
+  BON.flip = 2.5; P.flip = { t:0, dur:0.6, dir }; P.wfWin = 0; P.iframes = Math.max(P.iframes, 0.35); G.fovPunch = 1; sfx.dash();
   G.style += 6; G.combo++; G.comboT = 3.2; msg(dir.toUpperCase()+' FLIP!', 1, '#8fb4d0');
 }
 
@@ -347,7 +364,7 @@ function updatePlayer(dt){
       if (hasWish){ const h = Math.hypot(P.vx,P.vz); P.vx = P.vx*0.5 + wx*h*0.5; P.vz = P.vz*0.5 + wz*h*0.5; }
       burst(P.x, P.y+0.1, P.z, 8, 0xe8e6e0, 3); sfx.jump(); G.style += 3;
     }
-    if (tapped('slide') && !P.slamming && P.y - supportY(P.x,P.y,P.z) > 1.2){ P.slamming = true; P.vy = -32; P.vx *= 0.3; P.vz *= 0.3; sfx.dash(); }   // ground slam
+    if (tapped('slide') && !P.slamming && P.y - supportY(P.x,P.y,P.z) > 1.2){ P.slamming = true; P.slamY = P.y; P.vy = -32; P.vx *= 0.3; P.vz *= 0.3; sfx.dash(); }   // ground slam
     P.vy -= GRAV*gScale*dt; if (P.vy < -40) P.vy = -40;
     if (hasWish && P.dashT <= 0){
       accelerate(wx, wz, Math.min(SPRINT, 1.0), 10, dt);
@@ -386,6 +403,8 @@ function updatePlayer(dt){
 /* enemies are solid: the player can't walk or slide through them (and shoves them a little) */
 /* slam landing: shockwave; hold jump to bounce high, hold slide to shoot off into a slide */
 function groundSlam(){
+  const fall = Math.max(0, (P.slamY||P.y) - P.y); BON.slamV = Math.min(0.9, fall*0.06); BON.slamT = 0.25;       // the further you fell, the harder it lands
+  if (BON.slamV > 0.3) msg('PLUNGE!  +'+Math.round(BON.slamV*100)+'%', 0.9, '#ff9a3a');
   G.shake = Math.max(G.shake, 0.45); G.hitstop = 0.05; burst(P.x, 0.2, P.z, 20, 0xe8e6e0, 7); noise(0.25,0.4,200);
   for (const e of enemies){
     if (e.state === 'dying' || e.state === 'spawn') continue;
@@ -618,8 +637,8 @@ function moveEnemy(e, dx, dz){
   if (!circleBlocked(e.x, e.z+dz, e.rad, mh)) e.z += dz;
 }
 function damageEnemy(e, dmg, dx, dz, knock){
-  dmg *= dmgMul()*momentum()*(e.air ? 1.5 : 1); e.hp -= dmg; e.flash = 0.09; burst(e.x, e.y+1.2, e.z, 8, 0x8fa66a, 5);   // alien ichor
-  G.nums.push({ x:e.x, y:e.y+e.h*0.85, z:e.z, v:Math.round(dmg*10), t:0, big: knock > 10 || e.hp <= 0, c: e.hp <= 0 ? '#ff5a4a' : knock > 10 ? '#ffe14a' : '#efe3cf' });
+  const mi = momentumInfo(dx, dz); dmg *= dmgMul()*mi.mul*(e.air ? 1.5 : 1); e.hp -= dmg; e.flash = 0.09; burst(e.x, e.y+1.2, e.z, 8, 0x8fa66a, 5);   // alien ichor
+  G.nums.push({ x:e.x, y:e.y+e.h*0.85, z:e.z, v:Math.round(dmg*10), t:0, big: knock > 10 || e.hp <= 0 || mi.bonus >= 0.6, c: e.hp <= 0 ? '#ff5a4a' : mi.bonus >= 1.0 ? '#ff9a3a' : (knock > 10 || mi.bonus >= 0.5) ? '#ffe14a' : '#efe3cf' });
   if (G.nums.length > 40) G.nums.shift();
   if (e.kind === 'boss' && e.hp > 0){ G.combo++; G.comboT = 3.2; return; }          // super armour: no stagger, no knockback
   if (e.hp <= 0){
@@ -825,7 +844,7 @@ function updatePads(dt){
   for (const p of PADS) if (Math.abs(P.x-p.x) < 1 && Math.abs(P.z-p.z) < 1){
     P.vx += p.vx*0.6; P.vz += p.vz*0.6; P.vy = p.vy;                    // keep all the momentum you ran in with; the pad adds a lift + a gentle nudge toward its rooftop
     { const hs = Math.hypot(P.vx,P.vz); if (hs > MAXH){ P.vx *= MAXH/hs; P.vz *= MAXH/hs; } } P.onGround = false; P.coyote = 0; P.sliding = false; P.airJumps = 1; padCd = 0.5;
-    tone('square', 300, 900, 0.25, 0.15); burst(p.x, 0.3, p.z, 14, 0xffe14a, 6); G.fovPunch = 1; G.style += 4; break;
+    tone('square', 300, 900, 0.25, 0.15); burst(p.x, 0.3, p.z, 14, 0xffe14a, 6); G.fovPunch = 1; G.style += 4; BON.pad = 1.6; msg('LAUNCH!  +40% DAMAGE', 0.9, '#ffe14a'); break;
   }
 }
 /* healing 1: coffee - recruiters sometimes drop a cup (the boss drops 3); it drifts to you when you're hurt (pooled sprites) */
@@ -1025,7 +1044,8 @@ function update(dt, real){
     if (OBJ.phase === 'cut' || OBJ.phase === 'enter') updateCut(dt*(keys.KeyF ? 4 : 1)); else { updatePlayer(dt); updateCombat(dt); }
     for (const e of enemies.slice()) updateEnemy(e, dt);
     updateProjectiles(dt); updateParticles(dt); updateCoffee(dt); updatePads(dt); updateVending(); if (OBJ.phase === 'survive' || OBJ.phase === 'endless' || OBJ.phase === 'home') updateWaves(dt);
-    G.time += dt; G.style = Math.max(0, Math.min(100, G.style - dt*(G.speed < 3 && P.onGround ? 10 : 4))); G.comboT -= dt; if (G.comboT <= 0) G.combo = 0; G.vign = Math.max(0, G.vign - dt*1.6);
+    G.time += dt; BON.flip -= dt; BON.pad -= dt; BON.slamT -= dt; if (P.wall.on) BON.wall = 1.0; else BON.wall -= dt;
+    G.style = Math.max(0, Math.min(100, G.style - dt*(G.speed < 3 && P.onGround ? 10 : 4))); G.comboT -= dt; if (G.comboT <= 0) G.combo = 0; G.vign = Math.max(0, G.vign - dt*1.6);
     for (const m of G.msgs) m.t -= dt; G.msgs = G.msgs.filter(m => m.t > 0);
     for (const n of G.nums) n.t += dt; if (G.nums.length && G.nums[0].t > 0.9) G.nums = G.nums.filter(n => n.t < 0.9);
     for (const h of G.hits) h.t -= dt; if (G.hits.length && G.hits[0].t <= 0) G.hits = G.hits.filter(h => h.t > 0);
@@ -1171,7 +1191,7 @@ function drawHUD(){
   const sr = styleRank();
   if (G.style > 1){ HT('STYLE', DW-24, 138, 13, '#a3aab8', 'right'); HT('DCBAS'[sr], DW-24, 182, 44, ['#a3aab8','#8fb4d0','#3cff8a','#ffe14a','#ff5a4a'][sr], 'right');
     box(DW-104, 192, 80, 6, '#1f1018'); HR(DW-104, 192, 80*(sr === 4 ? 1 : (G.style%20)/20), 6, '#ffe14a'); }
-  const mo = momentum(); if (mo > 1.05) HT('MOMENTUM  x'+mo.toFixed(1), 24, DH-84, 15, '#ffe14a');
+  const mi = momentumInfo(); if (mi.mul > 1.05){ HT('DAMAGE  x'+mi.mul.toFixed(1), 24, DH-84, 15, mi.bonus >= 1.0 ? '#ff9a3a' : '#ffe14a'); HT(mi.tags.map(t => t[0]+' +'+Math.round(t[1]*100)+'%').join('   '), 24, DH-100, 11, '#c9cdd6'); }
   if (G.combo >= 2){ const names = ['','','HUSTLE','GRIND','OVERTIME','CRUNCH TIME','WORKAHOLIC']; HT(G.combo+' HIT  '+names[Math.min(6,G.combo)], DW-24, DH-24, 22, '#ffe14a', 'right'); }
   HR(DW/2-1,DH/2-9,2,6,'#efe3cf'); HR(DW/2-1,DH/2+3,2,6,'#efe3cf'); HR(DW/2-9,DH/2-1,6,2,'#efe3cf'); HR(DW/2+3,DH/2-1,6,2,'#efe3cf');
   if (hasSkill('whirlwind') && atk.hold > 0.12 && atk.wwCd <= 0){
