@@ -13,6 +13,7 @@ const ENEMY_COL = {
 function paintEnemyRaw(kind, state, frame){
   if (kind === 'boss') return paintBossRaw(state, frame);
   if (kind === 'counselor') return paintCounselorRaw(state, frame);
+  if (kind === 'inspector') return paintInspectorRaw(state, frame);
   const c = mkCanvas(32,64), g = c.getContext('2d'), k = ENEMY_COL[kind];
   const walk = state === 'walk', lean = state === 'hurt' ? -2 : 0, bob = walk && frame ? 1 : 0;
   const up = state === 'windup', out = state === 'attack', s = walk ? (frame ? 3 : -3) : 0, hot = up || out;
@@ -337,5 +338,32 @@ function paintCounselorRaw(state, frame){
   r(ox+22,oy+13,5,1,NAVY);                                                                                                                 // bridge
   if (state === 'windup' || state === 'attack'){ r(ox+16,oy+22,16,5,'#7a2a30'); r(ox+16,oy+22,16,1,'#e8e6e0'); for (let x=ox+17;x<ox+31;x+=3) r(x,oy+26,1,1,'#e8e6e0'); } else r(ox+18,oy+23,12,1,NAVY);   // mouth
   r(ox+17,oy+1,2,5,SK2); r(ox+29,oy+1,2,5,SK2); r(ox+16,oy-1,4,3,'#3cff8a'); r(ox+28,oy-1,4,3,'#3cff8a');                                  // antennae with bulbs
+  return c;
+}
+
+/* ---------- the Ticket Inspector (chapter 2 elite recruiter): broader and tougher than a recruiter. Conductor cap, gold-buttoned navy jacket, red armband, a long baton ---------- */
+function paintInspectorRaw(state, frame){
+  const c = mkCanvas(40,72), g = c.getContext('2d'), r = (x,y,w,h,col) => px(g,Math.round(x),Math.round(y),w,h,col);
+  const SK = '#c98a5a', SK2 = '#9a6240', SU = '#2a3a5c', SU2 = '#3f5580', GOLD = '#e0a050', oy = 3;
+  const walk = state === 'walk', s = walk ? (frame ? 3 : -3) : 0, bob = walk && frame ? 1 : 0, hy = oy + bob;
+  r(10+s,oy+48,7,16,SU); r(23-s,oy+48,7,16,SU); r(9+s,oy+63,9,4,NAVY); r(22-s,oy+63,9,4,NAVY); r(13+s,oy+48,1,16,'#b5463f'); r(26-s,oy+48,1,16,'#b5463f');   // legs, red trouser stripe
+  r(6,oy+22+bob,28,27,SU); r(6,oy+22+bob,4,27,SU2); r(30,oy+22+bob,4,27,shade(SU,.75));                                                                        // wide double-breasted jacket
+  r(17,oy+22+bob,6,13,'#e8e6e0'); r(19,oy+23+bob,2,13,'#b5463f');                                                                                                // shirt + tie
+  for (let i=0;i<3;i++){ r(13,oy+34+i*4+bob,2,2,GOLD); r(25,oy+34+i*4+bob,2,2,GOLD); }                                                                           // gold buttons
+  r(4,oy+21+bob,8,3,GOLD); r(28,oy+21+bob,8,3,GOLD); r(12,oy+22+bob,1,9,'#5f89ab'); r(27,oy+22+bob,1,9,'#5f89ab');                                              // epaulettes, lanyard
+  if (state === 'windup'){                                                                                                                                       // baton raised overhead
+    r(2,oy+8+bob,5,16,SU); r(33,oy+8+bob,5,16,SU); r(2,oy+4+bob,5,5,SK); r(33,oy+4+bob,5,5,SK); r(34,oy-4+bob,3,14,'#e8e6e0'); r(34,oy-4+bob,3,4,'#b5463f'); r(2,oy+22+bob,5,3,'#b5463f');
+  } else if (state === 'attack'){                                                                                                                                // wide sweep across the front
+    r(1,oy+26,8,5,SU); r(31,oy+26,9,5,SU); r(0,oy+25,4,7,SK); r(2,oy+37,36,3,'#e8e6e0'); r(2,oy+37,5,3,'#b5463f'); r(2,oy+27,5,3,'#b5463f');
+  } else {
+    r(2,oy+24+bob,5,18,SU); r(2,oy+42+bob,5,5,SK); r(2,oy+33+bob,5,4,'#b5463f'); r(33,oy+24+bob,5,18,SU); r(33,oy+42+bob,5,5,SK); r(35,oy+28+bob,2,22,'#e8e6e0'); r(35,oy+47+bob,2,4,'#b5463f');
+  }
+  r(16,oy+20+bob,8,3,SK2);                                                                                                                                       // neck
+  r(15,hy+1,10,3,SK); r(12,hy+4,16,13,SK); r(14,hy+17,12,3,SK); r(16,hy+20,8,1,SK); r(26,hy+5,2,11,SK2); r(15,hy+19,10,1,SK2);                                   // egg head
+  for (const [ex,ey,ew,eh] of [[13,9,3,3],[15,11,3,3],[17,13,2,2]]){ r(ex,hy+ey,ew,eh,NAVY); r(40-ex-ew,hy+ey,ew,eh,NAVY); }                                        // slanted black eyes
+  r(14,hy+9,1,1,'#fff'); r(25,hy+9,1,1,'#fff');
+  r(11,hy-1,18,5,SU); r(11,hy+3,18,2,GOLD); r(9,hy+5,22,2,shade(SU,.7)); r(19,hy,3,2,GOLD);                                                                      // conductor cap
+  r(14,hy-4,1,4,SK2); r(25,hy-4,1,4,SK2); r(13,hy-5,3,2,'#ff5a4a'); r(24,hy-5,3,2,'#ff5a4a');                                                                    // antennae through the cap
+  if (state === 'windup' || state === 'attack') r(16,hy+17,8,3,'#7a2a30'); else r(17,hy+18,6,1,NAVY);
   return c;
 }

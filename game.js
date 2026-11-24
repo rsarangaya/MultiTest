@@ -605,9 +605,10 @@ let deadT = 0;
 
 /* ============================ enemies / projectiles / particles ============================ */
 const enemies = [], projectiles = [];
-const ENEMY = { grunt:{ hp:6, speed:3.7, xp:12 }, runner:{ hp:4, speed:6.2, xp:16 }, thrower:{ hp:4, speed:3.0, xp:18 }, boss:{ hp:70, speed:2.4, xp:150 } };   // recruiter / headhunter / HR manager
+const ENEMY = { grunt:{ hp:6, speed:3.7, xp:12 }, runner:{ hp:4, speed:6.2, xp:16 }, thrower:{ hp:4, speed:3.0, xp:18 }, inspector:{ hp:16, speed:3.3, xp:36 }, boss:{ hp:70, speed:2.4, xp:150 } };   // recruiter / headhunter / HR manager
 const RECRUIT_LINES = ['We have competitive salary!', "We're like a family!", 'Join us!', 'Unlimited PTO!*', 'Great growth potential!', 'Free pizza Fridays!', 'Are you a team player?',
   "We're hiring... YOU!", "Let's circle back!", 'Passion required!', 'Real equity! Real!', 'Just 5 minutes of your time!', 'Sign here! Here! Here!', 'Synergy awaits!'];
+const INSPECTOR_LINES = ['Ticket, please!', 'This ticket is NOT valid.', 'Platform fee: your dignity.', 'Mind the gap in your resume.', 'Inspection time!', 'Fare evasion detected.', 'Next stop: HR.'];
 const BOSS_LINES = ['Accept the offer letter!', 'No negotiations!', 'Sign it. SIGN IT.', 'Once-in-a-lifetime opportunity!', 'Your references checked out!',
   'We need you to start yesterday!', 'Benefits? YOU are the benefit!', 'Non-compete: forever!', 'Welcome to the family. Forever.', 'Probation period: eternity!',
   'Overtime is a privilege!', 'Counter-offer DENIED!', 'The position is YOURS!', 'We pay in exposure!'];
@@ -632,11 +633,11 @@ function updateBubble(e, dt){
   if (e.state === 'dying' || e.state === 'spawn'){ dropBubble(e); return; }
   if (e.bubble){ e.bubble.t -= dt; if (e.bubble.t <= 0){ dropBubble(e); e.sayT = e.kind === 'boss' ? 1.5 + Math.random()*2 : 3.5 + Math.random()*4; } return; }
   e.sayT -= dt;
-  if (e.sayT <= 0){ const L = e.kind === 'boss' ? (e.sub === 'counselor' ? COUNSELOR_LINES : BOSS_LINES) : RECRUIT_LINES; showBubble(e, L[Math.floor(Math.random()*L.length)], 2.6); }
+  if (e.sayT <= 0){ const L = e.kind === 'boss' ? (e.sub === 'counselor' ? COUNSELOR_LINES : BOSS_LINES) : e.kind === 'inspector' ? INSPECTOR_LINES : RECRUIT_LINES; showBubble(e, L[Math.floor(Math.random()*L.length)], 2.6); }
 }
 const shadowGeo = new THREE.CircleGeometry(0.6, 12);
 function spawnEnemy(kind, at){
-  const boss = kind === 'boss', rad = boss ? 1.0 : 0.45;   // (a boss can wear another skin: see spawnCounselor in station.js)
+  const boss = kind === 'boss', elite = kind === 'inspector', rad = boss ? 1.0 : elite ? 0.62 : 0.45;   // (a boss can wear another skin: see spawnCounselor in station.js)
   let x = 0, z = 0, ok = false;
   if (at && !circleBlocked(at.x, at.z, rad)){ x = at.x; z = at.z; ok = true; }
   if (STA.active && !ok) return null;                                              // chapter 2 spawns only where it asks (the street's random spawn box is elsewhere)
@@ -646,7 +647,7 @@ function spawnEnemy(kind, at){
   const shadow = new THREE.Mesh(shadowGeo, new THREE.MeshBasicMaterial({ color:0x000000, transparent:true, opacity:0.35, depthWrite:false }));
   shadow.rotation.x = -Math.PI/2; fx.add(sprite); fx.add(shadow);
   enemies.push({ kind, skin:null, x, y:0, z, vx:0, vz:0, hp:ENEMY[kind].hp, state:'spawn', t:0, flash:0, stagger:0, anim:Math.random()*3, atkCd:1+Math.random(), sprite, shadow, hitDone:false, fade:1, sayT:1.5+Math.random()*4, bubble:null,
-                rad, h: boss ? 5.2 : 2.5, w: boss ? 4.0 : 1.29 });   // the boss is about twice a recruiter's height
+                rad, h: boss ? 5.2 : elite ? 3.1 : 2.5, w: boss ? 4.0 : elite ? 1.72 : 1.29 });   // the boss is about twice a recruiter's height
   if (boss) shadow.scale.set(2.2,2.2,2.2);
   burst(x,0.3,z,10,0x7d1a2e,3);
   return enemies[enemies.length-1];
@@ -662,6 +663,7 @@ function damageEnemy(e, dmg, dx, dz, knock){
   G.nums.push({ x:e.x, y:e.y+e.h*0.85, z:e.z, v:Math.round(dmg*10), t:0, big: knock > 10 || e.hp <= 0 || mi.bonus >= 0.6, c: e.hp <= 0 ? '#ff5a4a' : mi.bonus >= 1.0 ? '#ff9a3a' : (knock > 10 || mi.bonus >= 0.5) ? '#ffe14a' : '#efe3cf' });
   if (G.nums.length > 40) G.nums.shift();
   if (e.kind === 'boss' && e.hp > 0){ G.combo++; G.comboT = 3.2; return; }          // super armour: no stagger, no knockback
+  if (e.kind === 'inspector' && e.hp > 0 && knock <= 10 && !e.air){ G.combo++; G.comboT = 3.2; e.vx += dx*1.5; e.vz += dz*1.5; return; }   // elite: light hits don't stagger him (heavy swings, the launcher and parries do)
   if (e.hp <= 0){
     if (e.kind === 'boss'){ if (e.sub === 'counselor') counselorDefeated(); else msg('HIRING MANAGER DEFEATED!  +150 XP', 3.2, '#3cff8a'); burst(e.x, 2, e.z, 40, 0x6b8650, 10); G.shake = Math.max(G.shake, 0.6); sfx.wave(); knock = 2; }
     e.state = 'dying'; e.t = 0; e.vx = dx*knock*1.3; e.vz = dz*knock*1.3; G.kills++; G.combo++; G.comboT = 3.2;
@@ -695,6 +697,14 @@ function updateEnemy(e, dt){
       moveEnemy(e, e.lx*11*dt, e.lz*11*dt);
       if (!e.hitDone && d < 1.9 && dy < 2.2){ e.hitDone = true; hurtPlayer(20, e.x, e.z, e); }
       if (e.t >= 0.3){ e.state = 'chase'; e.atkCd = 0.9; if (!e.hitDone && d < 3.6 && dy < 2.6 && evading()) closeCall(); }
+    }
+  } else if (e.kind === 'inspector'){                                       // baton sweep: long, readable windup, then a wide arc in front of him
+    if (e.state === 'chase'){ if (d > 1.6) moveEnemy(e, nx*sp*dt, nz*sp*dt); if (d < 3.1 && e.atkCd <= 0 && dy < 2.2){ e.state = 'windup'; e.t = 0; e.lx = nx; e.lz = nz; showBubble(e, INSPECTOR_LINES[Math.floor(Math.random()*INSPECTOR_LINES.length)], 1.2); } }
+    else if (e.state === 'windup'){ e.lx = nx; e.lz = nz; if (e.t >= 0.6){ e.state = 'attack'; e.t = 0; e.hitDone = false; sfx.swing(); } }
+    else if (e.state === 'attack'){
+      moveEnemy(e, e.lx*3.5*dt, e.lz*3.5*dt);
+      if (!e.hitDone && e.t > 0.05 && d < 3.7 && dy < 2.2 && (nx*e.lx + nz*e.lz) > 0.2){ e.hitDone = true; if (hurtPlayer(22, e.x, e.z, e)){ P.vx += e.lx*7; P.vz += e.lz*7; } }
+      if (e.t >= 0.35){ e.state = 'chase'; e.atkCd = 1.3; }
     }
   } else if (e.kind === 'boss'){ updateBoss(e, dt, d, nx, nz, dy);
   } else {   // thrower: an executive that hurls memos
@@ -876,7 +886,7 @@ const coffeeMat = new THREE.SpriteMaterial({ map:coffeeTex(), transparent:true, 
 const coffees = [];
 for (let i=0;i<12;i++){ const s = new THREE.Sprite(coffeeMat); s.scale.set(0.5,0.66,1); s.visible = false; fx.add(s); coffees.push({ s, x:0, z:0, life:0 }); }
 function dropCoffee(e){
-  const n = e.kind === 'boss' ? 3 : (Math.random() < 0.22 ? 1 : 0);
+  const n = e.kind === 'boss' ? 3 : (Math.random() < (e.kind === 'inspector' ? 0.6 : 0.22) ? 1 : 0);
   for (let i=0;i<n;i++){ const c = coffees.find(q => q.life <= 0); if (!c) return; c.x = e.x+(Math.random()-0.5)*1.5; c.z = e.z+(Math.random()-0.5)*1.5; c.life = 15; c.s.visible = true; }
 }
 function updateCoffee(dt){
@@ -1487,7 +1497,7 @@ function debugActions(){
   }
   if (state !== 'play') return;                                          // the rest need a running game
   if (k(2)){ prog.points += 5; saveProgress(); dbgNote('+5 SKILL POINTS'); }
-  if (k(3)){ const e = spawnEnemy(Math.random() < 0.5 ? 'grunt' : Math.random() < 0.5 ? 'runner' : 'thrower'); dbgNote(e ? 'SPAWNED ' + e.kind.toUpperCase() : 'NO FREE SPOT'); }
+  if (k(3)){ const e = spawnEnemy(Math.random() < 0.4 ? 'grunt' : Math.random() < 0.5 ? 'runner' : Math.random() < 0.5 ? 'thrower' : 'inspector'); dbgNote(e ? 'SPAWNED ' + e.kind.toUpperCase() : 'NO FREE SPOT'); }
   if (k(4)){ if (G.boss) dbgNote('BOSS ALREADY OUT'); else { spawnBoss(); dbgNote(G.boss ? 'BOSS SPAWNED' : 'NO FREE SPOT'); } }
   if (k(5)){ let n = 0; for (const e of enemies.slice()) if (e.state !== 'dying'){ damageEnemy(e, 9999, 0, 1, 0); n++; } dbgNote('KILLED ' + n); }
   if (k(6)){

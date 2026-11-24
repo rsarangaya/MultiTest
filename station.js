@@ -86,7 +86,9 @@ function beginStation(){
   });
 }
 function spawnRushEnemy(prog){
-  const r = Math.random(), kind = r < 0.5 ? 'grunt' : r < 0.82 ? 'runner' : 'thrower';
+  let insp = 0; for (const e of enemies) if (e.kind === 'inspector' && e.state !== 'dying') insp++;
+  const r = Math.random(), pi = insp < 2 + Math.round(prog*2) ? 0.06 + 0.16*prog : 0;                           // Ticket Inspectors: rarer at the start, a regular sight near the station
+  const kind = r < pi ? 'inspector' : r < 0.5 ? 'grunt' : r < 0.82 ? 'runner' : 'thrower';
   for (let i=0;i<14;i++){
     const ahead = Math.random() < 0.78, z = ahead ? P.z - 20 - Math.random()*30 : P.z + 14 + Math.random()*16, x = SX + (Math.random()*2-1)*15;
     if (z < STA.doorZ + 5 || z > STA.startZ + 2) continue;
