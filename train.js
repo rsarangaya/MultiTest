@@ -33,14 +33,14 @@ function startTrain(car){
 }
 function trSetupCar(first){
   TR.tp = trPlayerNew(70); TR.es = []; TR.pr = []; TR.fx = []; TR.nums = []; TR.cof = []; TR.cam = 0; TR.lockCam = null; TR.waveIdx = 0; TR.leaving = false; TR.stop = 0;
-  TR.spawned = CARS[TR.car].waves.map(() => false);
+  TR.spawned = CARS[TR.car].waves.map(() => false); P.swUsed = false;
 }
 const trAlive = () => TR.es.filter(e => e.st !== 'dead').length;
 const trLocked = () => TR.lockCam !== null;
 
 /* ---------- enemies ---------- */
 function trSpawn(kind, x){
-  const sp = TE[kind]; TR.es.push({ kind, x, y:0, face: x < TR.tp.x ? 1 : -1, hp:sp.hp, hpMax:sp.hp, st:'walk', t:0, cd:0.6 + Math.random()*0.8, flash:0, hit:false, vx:0, anim:Math.random()*3, fade:1, haste:0 });
+  const sp = TE[kind]; TR.es.push({ kind, x, y:0, face: x < TR.tp.x ? 1 : -1, hp:sp.hp, hpMax:sp.hp, st:'walk', t:0, cd:0.6 + Math.random()*0.8, flash:0, hit:false, vx:0, vy:0, air:false, anim:Math.random()*3, fade:1, haste:0 });
 }
 function trSpawnWave(w){
   const cam = TR.cam; TR.lockCam = cam; let l = 0, r = 0;
@@ -58,16 +58,18 @@ function trHurtPlayer(dmg, fromX, e, heavy){
     dmg *= 0.2 - 0.05*rank('ironguard'); sfx.parry(); tp.vx = -tp.face*60;
   } else { tp.st = 'hurt'; tp.t = 0; tp.vx = -(fromX - tp.x >= 0 ? 1 : -1)*(heavy ? 170 : 110); if (heavy) tp.vy = 150; tp.inv = 0.7; tp.combo = 0; }
   P.hp -= dmg; G.vign = 1; TR.shake = 0.4; sfx.hurt(); trSpark(tp.x, 44, '#ff5a4a', 8); TR.nums.push({ x:tp.x, y:70, v:Math.round(dmg), t:0, c:'#ff5a4a' });
+  if (P.hp <= 0 && hasSkill('secondwind') && !P.swUsed){ P.hp = 25; P.swUsed = true; tp.inv = 1.5; msg('SECOND WIND!', 1.6, '#3cff8a'); sfx.parry(); }
   if (P.hp <= 0){ P.hp = 0; TR.over = true; state = 'dead'; deadT = 0; menuIdx = 0; hiredStart(); sfx.die(); }
   return true;
 }
 function trSpark(x, y, col, n){ for (let i=0;i<n;i++) TR.fx.push({ x, y, vx:(Math.random()-0.5)*220, vy:60+Math.random()*160, t:0, col }); }
 function trHitEnemy(e, dmg, knock, heavy){
-  const tp = TR.tp, mul = dmgMul()*(1 + Math.min(0.5, tp.combo*0.05))*(tp.y > 8 ? 1.25 : 1) * momentumTrain();
+  const tp = TR.tp, mul = dmgMul()*(1 + Math.min(0.5, tp.combo*0.05))*(tp.y > 8 ? 1.25 : 1) * momentumTrain() * (e.air ? 1.5 : 1);
   dmg *= mul; e.hp -= dmg; e.flash = 0.09; trSpark(e.x, 50, '#efe3cf', 6); TR.nums.push({ x:e.x, y:76, v:Math.round(dmg*10), t:0, c: heavy ? '#ffe14a' : '#efe3cf' });
   tp.combo++; tp.comboT = 2.2; G.style = Math.min(100, G.style + 3); G.combo = tp.combo; G.comboT = 2.2;
   const dir = e.x >= tp.x ? 1 : -1;
   if (e.hp <= 0){ e.st = 'dead'; e.t = 0; e.vx = dir*(knock + 60); G.kills++; gainXp(Math.round(TE[e.kind].xp*(1+styleRank()*0.25))); P.hp = Math.min(P.maxHp, P.hp + 2); if (Math.random() < (e.kind === 'inspector' ? 0.6 : 0.2)) TR.cof.push({ x:e.x, t:0 }); TR.stop = 0.07; TR.shake = 0.4; sfx.hit(); return; }
+  if (hasSkill('launcher') && (heavy || e.air)){ e.air = true; e.vy = e.y > 4 ? Math.max(e.vy, 190) : 330; e.vx = dir*(e.y > 4 ? 40 : 90); e.st = 'stagger'; e.t = 0; e.hit = false; if (!tp.air && tp.y <= 0 && !e.wasAir){ e.wasAir = true; msg('LAUNCH!', 0.6, '#ffe14a'); } TR.stop = 0.07; TR.shake = Math.max(TR.shake, 0.3); sfx.hit(); return; }   // LAUNCHER skill: heavy hits send them up; hit them again to juggle
   if (e.kind === 'inspector' && !heavy){ e.vx += dir*30; sfx.hit(); TR.stop = 0.03; return; }                     // elite: light hits do not stagger him
   e.st = 'stagger'; e.t = 0; e.vx = dir*knock; e.hit = false; TR.stop = heavy ? 0.08 : 0.045; TR.shake = Math.max(TR.shake, heavy ? 0.4 : 0.15); sfx.hit();
 }
@@ -75,6 +77,7 @@ const momentumTrain = () => 1 + 0.15*styleRank();                               
 function trUpdateEnemy(e, dt){
   const tp = TR.tp, sp = TE[e.kind], dx = tp.x - e.x, d = Math.abs(dx), dir = dx >= 0 ? 1 : -1;
   e.anim += dt; e.flash = Math.max(0, e.flash - dt); e.cd -= dt; e.t += dt;
+  if (e.air && e.st !== 'dead'){ e.vy -= 820*dt; e.y += e.vy*dt; e.x += e.vx*dt; e.vx *= Math.pow(0.3, dt); if (e.y <= 0){ e.y = 0; e.vy = 0; e.air = false; e.wasAir = false; e.st = 'stagger'; e.t = 0; e.vx = 0; trSpark(e.x, 4, '#e8e6e0', 5); } return; }
   if (e.st === 'dead'){ e.x += e.vx*dt; e.vx *= Math.pow(0.02, dt); e.fade = Math.max(0, 1 - e.t/0.7); return; }
   if (e.st === 'stagger'){ e.x += e.vx*dt; e.vx *= Math.pow(0.03, dt); if (e.t >= (e.kind === 'inspector' ? 0.5 : 0.38)){ e.st = 'walk'; e.cd = Math.max(e.cd, 0.4); } return; }
   const spd = sp.spd*(e.haste > 0 ? 1.4 : 1);
@@ -120,13 +123,14 @@ function trUpdatePlayer(dt){
   const ground = tp.y <= 0 && tp.vy <= 0, busy = tp.st === 'atk' || tp.st === 'hurt' || tp.st === 'dash' || tp.st === 'spin';
   /* actions */
   if (tp.st === 'hurt'){ if (tp.t > 0.32) tp.st = 'idle'; }
-  else if (tp.st === 'dash'){ tp.x += tp.face*430*dt; if (tp.t > 0.17){ tp.st = 'idle'; tp.vx = 0; } }
+  else if (tp.st === 'dash'){ tp.x += tp.face*430*dt; if (atk && tp.t > 0.03){ if (hasSkill('dashslash')){ trStartAtk(tp, 0); tp.dashAtk = true; tp.vx = tp.face*300; msg('DASH SLASH!', 0.5, '#ffe14a'); } else if (!tp.lockMsg || TR.t - tp.lockMsg > 1.5){ tp.lockMsg = TR.t; msg('DASH SLASH IS LOCKED  (PAUSE > SKILLS)', 1.2, '#a3aab8'); } } else if (tp.t > 0.17){ tp.st = 'idle'; tp.vx = 0; } }
   else if (tp.st === 'spin'){
     if (!tp.hit && tp.t > 0.14){ tp.hit = true; let n = 0; for (const e of TR.es) if (e.st !== 'dead' && Math.abs(e.x - tp.x) < 72){ trHitEnemy(e, 2.2, 200, true); n++; } for (const p of TR.pr) if (!p.mine && Math.abs(p.x - tp.x) < 72){ p.mine = true; p.vx = -p.vx*1.4; } if (n) TR.stop = 0.08; sfx.swing(); TR.shake = 0.3; }
     if (tp.t > 0.46){ tp.st = 'idle'; }
   }
   else if (tp.st === 'atk'){
-    const a = tp.air ? { dur:0.3, hit:0.1, reach:44, dmg:1.6, knock:90, heavy:false } : ATK[tp.idx];
+    const a0 = tp.air ? { dur:0.3, hit:0.1, reach:44, dmg:1.6, knock:90, heavy:false } : ATK[tp.idx], a = tp.dashAtk ? Object.assign({}, a0, { reach:a0.reach + 24, dmg:a0.dmg + 1.0, knock:a0.knock + 60, heavy:true }) : a0;
+    if (tp.dashAtk){ tp.x += tp.vx*dt; tp.vx *= Math.pow(0.02, dt); }
     if (!tp.hit && tp.t >= a.hit){ tp.hit = true; let n = 0; const reach = a.reach;
       for (const e of TR.es) if (e.st !== 'dead'){ const rx = (e.x - tp.x)*tp.face; if (rx > -12 && rx < reach + 12) { trHitEnemy(e, a.dmg, a.knock, a.heavy); n++; } }
       for (const p of TR.pr) if (!p.mine){ const rx = (p.x - tp.x)*tp.face; if (rx > -6 && rx < reach + 14){ p.mine = true; p.vx = -p.vx*1.5; sfx.parry(); msg('DEFLECT!', 0.6, '#8fb4d0'); } }
@@ -135,7 +139,8 @@ function trUpdatePlayer(dt){
     if (tp.t >= a.dur){ if (tp.queued && !tp.air && tp.idx < 2){ trStartAtk(tp, tp.idx + 1); } else { tp.st = 'idle'; tp.vx = 0; tp.chainT = 0.4; } }
   }
   if (tp.st === 'idle' || tp.st === 'walk' || tp.st === 'block' || tp.st === 'jump'){
-    if (dash && tp.dashCd <= 0 && ground){ tp.st = 'dash'; tp.t = 0; tp.inv = Math.max(tp.inv, 0.22); tp.dashCd = 0.8; sfx.dash(); tp.face = L ? -1 : R ? 1 : tp.face; }
+    if (dash && tp.dashCd <= 0 && ground){ tp.st = 'dash'; tp.t = 0; tp.inv = Math.max(tp.inv, 0.22); tp.dashCd = 0.9 - 0.12*rank('footwork'); sfx.dash(); tp.face = L ? -1 : R ? 1 : tp.face; }
+    else if (spin && !hasSkill('whirlwind')){ if (!tp.lockMsg || TR.t - tp.lockMsg > 1.5){ tp.lockMsg = TR.t; msg('WHIRLWIND IS LOCKED  (PAUSE > SKILLS)', 1.2, '#a3aab8'); } }
     else if (spin && tp.spinCd <= 0){ tp.st = 'spin'; tp.t = 0; tp.hit = false; tp.spinCd = 3.4; tp.inv = Math.max(tp.inv, 0.4); G.fovPunch = 1; msg('WHIRLWIND!', 0.7, '#ffe14a'); }
     else if (atk){ tp.air = !ground; trStartAtk(tp, !tp.air && tp.chainT > 0 && tp.lastIdx < 2 ? tp.lastIdx + 1 : 0); }
     else if (blk && ground){ if (tp.st !== 'block'){ tp.st = 'block'; tp.blockT = 0; } tp.blockT += dt; tp.vx = 0; }
@@ -154,13 +159,14 @@ function trUpdatePlayer(dt){
   let lo = 12, hi = TRN.carW - 12; if (trLocked()){ lo = Math.max(lo, TR.lockCam + 14); hi = Math.min(hi, TR.lockCam + TRN.W - 14); }
   tp.x = Math.max(lo, Math.min(hi, tp.x));
 }
-function trStartAtk(tp, idx){ tp.st = 'atk'; tp.t = 0; tp.hit = false; tp.queued = false; tp.idx = idx; tp.lastIdx = idx; tp.chainT = 0; if (!tp.air) tp.vx = 0; }
+function trStartAtk(tp, idx){ tp.dashAtk = false; tp.st = 'atk'; tp.t = 0; tp.hit = false; tp.queued = false; tp.idx = idx; tp.lastIdx = idx; tp.chainT = 0; if (!tp.air) tp.vx = 0; }
 
 /* ---------- main update (fixed sub-steps) ---------- */
 function updateTrain(real){
   if (pressed.Escape){ openPause(); return; }
   if (real <= 0) return;
-  TR.t += real; TR.rumble -= real; if (TR.rumble <= 0){ TR.rumble = 0.7; noise(0.14, 0.05, 110); }
+  TR.t += real; TR.rumble -= real; if (TR.rumble <= 0){ TR.rumble = 0.5556; noise(0.07, 0.1, 380); tone('square', 78, 52, 0.08, 0.07); setTimeout(() => { noise(0.06, 0.07, 320); tone('square', 70, 48, 0.07, 0.05); }, 150); }   // clack-clack of the rail joints
+  { const tn = trTunnel(TR.t); if (tn > 0.9 && !TR.inTun){ TR.inTun = true; noise(0.6, 0.12, 200); } else if (tn < 0.1) TR.inTun = false; }
   TR.shake = Math.max(0, TR.shake - real*2); TR.stop = Math.max(0, TR.stop - real);
   for (const m of G.msgs) m.t -= real; G.msgs = G.msgs.filter(m => m.t > 0);
   G.style = Math.max(0, G.style - real*2); G.vign = Math.max(0, G.vign - real*1.6);
@@ -212,35 +218,56 @@ function trCityLayer(g, wx, wy, ww, wh, off, col, minH, varH, per, seed){
     g.fillRect(wx + bx - off, wy + wh - bh, bw, bh);
   }
 }
+/* outside the windows: far skyline, mid buildings, then fast telegraph poles + wires + an embankment that smear past; tunnels every ~14 s (dark, with light streaks) */
+function trTunnel(t){ const c = (t % 14); return c < 9 ? 0 : c < 9.5 ? (c-9)/0.5 : c < 12.5 ? 1 : c < 13 ? 1 - (c-12.5)/0.5 : 0; }
+function trWindow(g, wx, wy, ww, wh, t, wi, tun){
+  g.save(); g.beginPath(); g.rect(wx, wy, ww, wh); g.clip();
+  const sky = g.createLinearGradient(0, wy, 0, wy + wh); sky.addColorStop(0, '#7fb0d6'); sky.addColorStop(1, '#cfe3ef'); g.fillStyle = sky; g.fillRect(wx, wy, ww, wh);
+  trCityLayer(g, wx, wy, ww, wh, t*55 + wi*61, '#b7c8d8', 26, 26, 46, 3);                                                  // far skyline (slow)
+  trCityLayer(g, wx, wy, ww, wh, t*150 + wi*47 + 17, '#8296ae', 18, 34, 36, 7);                                             // mid buildings
+  g.fillStyle = '#44543f'; g.fillRect(wx, wy + wh - 16, ww, 16); g.fillStyle = '#5d6f55'; g.fillRect(wx, wy + wh - 16, ww, 3);        // embankment
+  for (let j = -1; j < ww/26 + 2; j++){ const dx = wx + j*26 - ((t*760) % 26); g.fillStyle = 'rgba(230,236,220,.55)'; g.fillRect(dx, wy + wh - 9, 14, 2); }   // ballast smearing by
+  const per = 150, off = (t*560 + wi*83) % per;                                                                              // telegraph poles: fast + smeared
+  for (let i2 = -1; i2 < ww/per + 2; i2++){ const bx = wx + i2*per - off; g.fillStyle = 'rgba(27,31,46,.28)'; g.fillRect(bx + 4, wy, 22, wh); g.fillStyle = '#1b1f2e'; g.fillRect(bx, wy, 4, wh); g.fillRect(bx - 8, wy + 10, 20, 3);
+    g.strokeStyle = 'rgba(27,31,46,.55)'; g.lineWidth = 1; g.beginPath(); g.moveTo(bx - 8, wy + 11); g.quadraticCurveTo(bx + per/2, wy + 24, bx + per - 8, wy + 11); g.stroke(); }
+  if (tun > 0){                                                                                                              // tunnel: black with rushing lights
+    g.globalAlpha = Math.min(1, tun*1.2); g.fillStyle = '#12151f'; g.fillRect(wx, wy, ww, wh);
+    for (let r = 0; r < 3; r++){ const ly = wy + 12 + r*22, sp = 900 + r*260, lx = wx - ((t*sp + wi*97 + r*40) % 200); for (let k = 0; k < ww/200 + 2; k++){ g.fillStyle = '#ffe9a0'; g.fillRect(lx + k*200, ly, 46, 3); g.fillStyle = 'rgba(255,233,160,.3)'; g.fillRect(lx + k*200 - 30, ly, 100, 3); } }
+    g.globalAlpha = 1; }
+  g.fillStyle = 'rgba(255,255,255,.2)'; g.beginPath(); g.moveTo(wx + 8, wy); g.lineTo(wx + 24, wy); g.lineTo(wx + 6, wy + wh); g.lineTo(wx - 10, wy + wh); g.fill();       // glass glare
+  g.restore();
+}
+function trRound(g, x, y, w, h, r){ g.beginPath(); g.moveTo(x+r, y); g.lineTo(x+w-r, y); g.quadraticCurveTo(x+w, y, x+w, y+r); g.lineTo(x+w, y+h-r); g.quadraticCurveTo(x+w, y+h, x+w-r, y+h); g.lineTo(x+r, y+h); g.quadraticCurveTo(x, y+h, x, y+h-r); g.lineTo(x, y+r); g.quadraticCurveTo(x, y, x+r, y); g.closePath(); }
 function drawTrain(g){
-  const cam = Math.round(TR.cam + (Math.random()-0.5)*TR.shake*6), fy = TRN.floorY, t = TR.t, sw = Math.round((Math.random()-0.5)*TR.shake*4);
-  g.save(); g.translate(0, sw); g.fillStyle = '#2c3142'; g.fillRect(-10,-10,500,300);
-  g.fillStyle = '#e4dfcf'; g.fillRect(0, 0, TRN.W, fy - 28);                                                               // wall
-  g.fillStyle = '#5a6275'; g.fillRect(0, 0, TRN.W, 24); g.fillStyle = '#3f4658'; g.fillRect(0, 22, TRN.W, 2);                 // ceiling
-  for (let lx = -(cam % 120); lx < TRN.W; lx += 120){ g.fillStyle = '#fdf6e3'; g.fillRect(lx + 20, 8, 60, 5); g.fillStyle = '#bcd6e8'; g.fillRect(lx + 20, 13, 60, 2); }   // ceiling lights
-  /* windows with the city sliding past (three parallax layers) */
-  for (let k = -1; k < 6; k++){
-    const wx = Math.round(k*120 - (cam % 120) + 14), wy = 36, ww = 92, wh = 82;
-    g.fillStyle = NAVY; g.fillRect(wx-3, wy-3, ww+6, wh+6); g.fillStyle = '#9ec3dc'; g.fillRect(wx, wy, ww, wh); g.fillStyle = '#bcd6e8'; g.fillRect(wx, wy, ww, 22);
-    g.save(); g.beginPath(); g.rect(wx, wy, ww, wh); g.clip();
-    const sc = t*150, wi = Math.floor(cam/120) + k;                                                        // scenery slides by with time; each physical window sees a different stretch
-    trCityLayer(g, wx, wy, ww, wh, sc*0.25 + wi*61, '#a9bccd', 30, 30, 46, 3);
-    trCityLayer(g, wx, wy, ww, wh, sc*0.5 + wi*47 + 17, '#7d8fa8', 20, 36, 38, 7);
-    trCityLayer(g, wx, wy, ww, wh, sc*1.0 + wi*29 + 41, '#4e5d78', 8, 30, 30, 11);
-    g.fillStyle = 'rgba(255,255,255,.18)'; g.fillRect(wx + 8, wy + 4, 5, wh - 8); g.restore();
-    g.fillStyle = '#7d8597'; g.fillRect(wx + ww/2 - 1, wy, 2, wh); g.fillStyle = '#a3aab8'; g.fillRect(wx - 4, wy + wh + 2, ww + 8, 3);
+  const cam = Math.round(TR.cam + (Math.random()-0.5)*TR.shake*6), fy = TRN.floorY, t = TR.t, tun = trTunnel(t);
+  const clack = (t*1.8) % 1, bump = clack < 0.09 ? (1 - clack/0.09)*2.2 : 0, sway = Math.sin(t*1.3)*1.4, sw = Math.round((Math.random()-0.5)*TR.shake*4 + bump);
+  g.save(); g.translate(Math.round(sway), sw); g.fillStyle = '#2c3142'; g.fillRect(-10,-10,500,300);
+  /* the car: pale interior with a blue + orange stripe, rounded ceiling coves, advert strip above the windows */
+  g.fillStyle = '#e9ebec'; g.fillRect(0, 0, TRN.W, fy - 24);
+  g.fillStyle = '#d3d8dc'; g.fillRect(0, 0, TRN.W, 30); g.fillStyle = '#c3c9cf'; g.fillRect(0, 26, TRN.W, 6); g.fillStyle = '#aab2ba'; g.fillRect(0, 31, TRN.W, 2);
+  for (let lx = -(cam % 150); lx < TRN.W; lx += 150){ g.fillStyle = '#fdfdf6'; g.fillRect(lx + 24, 9, 100, 7); g.fillStyle = tun > 0.2 && Math.floor(t*18 + lx)%7 === 0 ? '#9aa2ac' : '#e6f2ff'; g.fillRect(lx + 26, 11, 96, 3); g.fillStyle = 'rgba(255,255,255,.18)'; g.fillRect(lx + 8, 16, 132, 9); }   // fluorescent strips
+  for (let ax = -(cam % 130) + 8; ax < TRN.W + 20; ax += 130){ g.fillStyle = NAVY; g.fillRect(ax - 1, 34, 106, 17); g.fillStyle = ['#ffe14a','#f2b8b0','#bcd6e8','#e0a050'][Math.abs(Math.floor((ax + cam)/130))%4]; g.fillRect(ax, 35, 104, 15); g.fillStyle = NAVY; g.fillRect(ax + 6, 39, 50, 2); g.fillRect(ax + 6, 44, 30, 2); }   // adverts (BizNes jobs, naturally)
+  /* windows */
+  for (let k = -1; k < 5; k++){
+    const wx = Math.round(k*130 - (cam % 130) + 12), wy = 56, ww = 104, wh = 70, wi = Math.floor(cam/130) + k;
+    g.fillStyle = '#2f3544'; trRound(g, wx-5, wy-5, ww+10, wh+10, 12); g.fill(); g.fillStyle = '#6f7a8c'; trRound(g, wx-3, wy-3, ww+6, wh+6, 10); g.fill();
+    g.save(); trRound(g, wx, wy, ww, wh, 8); g.clip(); trWindow(g, wx, wy, ww, wh, t, wi, tun); g.restore();
+    if (wi%3 === 0){ g.fillStyle = '#d9c8a8'; g.fillRect(wx, wy, ww, 20); for (let y2 = wy + 3; y2 < wy + 20; y2 += 4){ g.fillStyle = '#bfa985'; g.fillRect(wx, y2, ww, 1); } g.fillStyle = '#a3926f'; g.fillRect(wx, wy + 19, ww, 2); }   // a blind half down
+    g.fillStyle = '#9aa4b2'; g.fillRect(wx + ww/2 - 1, wy - 3, 2, wh + 6); g.fillStyle = '#7d8597'; g.fillRect(wx - 6, wy + wh + 5, ww + 12, 3); g.fillStyle = '#5a6275'; g.fillRect(wx - 6, wy + wh + 8, ww + 12, 1);
   }
-  /* benches, straps, poles */
-  for (let bx = -(cam % 260) - 20; bx < TRN.W + 40; bx += 260){
-    g.fillStyle = '#2f4a6b'; g.fillRect(bx + 60, fy - 80, 120, 22); g.fillStyle = NAVY; g.fillRect(bx + 60, fy - 60, 120, 2);
-    g.fillStyle = '#3f5f82'; g.fillRect(bx + 60, fy - 58, 120, 14); g.fillStyle = '#5f89ab'; g.fillRect(bx + 60, fy - 58, 120, 3); g.fillStyle = '#5a6275'; g.fillRect(bx + 66, fy - 44, 4, 16); g.fillRect(bx + 170, fy - 44, 4, 16);
+  /* continuous blue bench along the wall (seat segments), stanchion poles, grab rail + swaying straps */
+  for (let bx = -(cam % 118) - 14; bx < TRN.W + 30; bx += 118){
+    g.fillStyle = '#26364f'; g.fillRect(bx + 2, fy - 72, 108, 24); g.fillStyle = '#3a5476'; g.fillRect(bx + 4, fy - 70, 104, 20); g.fillStyle = '#4d6c92'; g.fillRect(bx + 4, fy - 70, 104, 3); g.fillStyle = '#2d4260'; g.fillRect(bx + 56, fy - 68, 1, 16);
+    g.fillStyle = NAVY; g.fillRect(bx, fy - 46, 112, 3); g.fillStyle = '#2f4a6b'; g.fillRect(bx + 2, fy - 43, 108, 15); g.fillStyle = '#4d6c92'; g.fillRect(bx + 2, fy - 43, 108, 3); g.fillStyle = '#e07a4a'; g.fillRect(bx + 2, fy - 28, 108, 2); g.fillStyle = '#3f4658'; g.fillRect(bx + 8, fy - 28, 5, 8); g.fillRect(bx + 99, fy - 28, 5, 8);
   }
-  for (let sx = -(cam % 90) + 20; sx < TRN.W + 30; sx += 90){ const sway = Math.sin(t*3 + sx*0.05)*2; g.strokeStyle = '#5a6275'; g.lineWidth = 2; g.beginPath(); g.moveTo(sx, 24); g.lineTo(sx + sway, 50); g.stroke(); g.strokeStyle = '#e0a050'; g.beginPath(); g.ellipse(sx + sway, 56, 4, 6, 0, 0, 6.3); g.stroke(); }
-  g.fillStyle = '#8f7b5e'; g.fillRect(0, fy - 28, TRN.W, 8);                                                                   // skirting
-  for (let px_ = -(cam % 300) + 130; px_ < TRN.W + 10; px_ += 300){ g.fillStyle = NAVY; g.fillRect(px_ - 3, 24, 7, fy - 24); g.fillStyle = '#c9cdd6'; g.fillRect(px_ - 2, 24, 4, fy - 24); g.fillStyle = '#e8e6e0'; g.fillRect(px_ - 2, 24, 1, fy - 24); }
-  /* floor */
-  g.fillStyle = '#8f96a6'; g.fillRect(0, fy - 20, TRN.W, 4); g.fillStyle = '#6b7387'; g.fillRect(0, fy - 16, TRN.W, 300);
-  for (let fx_ = -(cam % 48); fx_ < TRN.W; fx_ += 48){ g.fillStyle = '#5a6275'; g.fillRect(fx_, fy - 16, 2, 300); } g.fillStyle = '#ffe14a'; g.fillRect(0, fy - 12, TRN.W, 2);
+  g.fillStyle = '#c9cdd6'; g.fillRect(0, 31, TRN.W, 3); g.fillStyle = '#fff'; g.fillRect(0, 31, TRN.W, 1); g.fillStyle = '#7d8597'; g.fillRect(0, 34, TRN.W, 1);               // overhead grab rail
+  for (let sx = -(cam % 118) + 40; sx < TRN.W + 30; sx += 118){ const swy = Math.sin(t*2.4 + sx*0.05 + bump)*3 + sway*0.5; g.strokeStyle = '#5a6275'; g.lineWidth = 2; g.beginPath(); g.moveTo(sx, 34); g.lineTo(sx + swy, 60); g.stroke(); g.strokeStyle = '#e0a050'; g.lineWidth = 2; g.beginPath(); g.ellipse(sx + swy, 67, 4, 7, 0, 0, 6.3); g.stroke(); }
+  for (let px_ = -(cam % 236) + 126; px_ < TRN.W + 10; px_ += 236){ g.fillStyle = NAVY; g.fillRect(px_ - 3, 34, 7, fy - 34); g.fillStyle = '#c9cdd6'; g.fillRect(px_ - 2, 34, 4, fy - 34); g.fillStyle = '#fff'; g.fillRect(px_ - 2, 34, 1, fy - 34); }
+  g.fillStyle = '#4d6c92'; g.fillRect(0, fy - 24, TRN.W, 4); g.fillStyle = '#e07a4a'; g.fillRect(0, fy - 20, TRN.W, 2);                                                       // wall base stripes
+  /* floor: dark rubber with a moving-train feel (the whole car rocks) */
+  g.fillStyle = '#7d8597'; g.fillRect(0, fy - 18, TRN.W, 3); g.fillStyle = '#5a6275'; g.fillRect(0, fy - 15, TRN.W, 300);
+  for (let fx_ = -(cam % 40); fx_ < TRN.W; fx_ += 40){ g.fillStyle = '#4b5366'; g.fillRect(fx_, fy - 15, 2, 300); g.fillStyle = '#656d80'; g.fillRect(fx_ + 20, fy - 6, 8, 2); g.fillRect(fx_ + 8, fy + 8, 8, 2); g.fillRect(fx_ + 28, fy + 16, 8, 2); }
+  g.fillStyle = '#ffe14a'; g.fillRect(0, fy - 12, TRN.W, 2);
   /* doors at both ends of the car */
   const door = (wx, open, label) => { const sx = wx - cam; if (sx < -60 || sx > TRN.W + 60) return;
     g.fillStyle = NAVY; g.fillRect(sx - 2, 40, 64, fy - 40 + 2); g.fillStyle = '#a3aab8'; g.fillRect(sx, 42, 60, fy - 42); g.fillStyle = open ? '#3cff8a' : '#5a6275'; g.fillRect(sx + 6, 50, 20, 70); g.fillRect(sx + 34, 50, 20, 70); g.fillStyle = open ? '#fdf6e3' : '#8fb4d0'; g.fillRect(sx + 8, 52, 16, 66); g.fillRect(sx + 36, 52, 16, 66);
@@ -256,13 +283,14 @@ function drawTrain(g){
   for (const p of TR.pr){ const sx = p.x - cam, sy = fy - p.y; g.save(); g.translate(sx, sy); g.rotate(TR.t*14*Math.sign(p.vx)); g.drawImage(trPaper(p.mine), -6, -6, 12, 12); g.restore(); }
   for (const f of TR.fx){ g.globalAlpha = Math.max(0, 1 - f.t/0.5); g.fillStyle = f.col; g.fillRect(f.x - cam - 1, fy - f.y - 1, 3, 3); } g.globalAlpha = 1;
   if (G.vign > 0){ const gr = g.createRadialGradient(240,135,100,240,135,300); gr.addColorStop(0,'rgba(165,42,63,0)'); gr.addColorStop(1,'rgba(165,42,63,'+Math.min(0.6,G.vign*0.5)+')'); g.fillStyle = gr; g.fillRect(0,0,480,270); }
+  if (tun > 0){ g.globalAlpha = 0.32*tun; g.fillStyle = '#10131c'; g.fillRect(-10, -10, 500, 300); g.globalAlpha = 1; if (tun > 0.6 && Math.floor(t*14)%9 === 0){ g.globalAlpha = 0.12; g.fillStyle = '#fff'; g.fillRect(-10, -10, 500, 300); g.globalAlpha = 1; } }
   g.restore();
 }
 let trCupCv = null, trPaperCv = [null, null];
 function trCup(){ if (!trCupCv){ const c = mkCanvas(12,16), g = c.getContext('2d'); px(g,1,3,10,12,NAVY); px(g,2,4,8,10,'#f4f1ea'); px(g,2,7,8,4,'#8f5a3a'); px(g,0,2,12,3,NAVY); px(g,1,2,10,2,'#b5463f'); trCupCv = c; } return trCupCv; }
 function trPaper(mine){ const k = mine ? 1 : 0; if (!trPaperCv[k]){ const c = mkCanvas(14,14), g = c.getContext('2d'); px(g,0,0,14,14,NAVY); px(g,1,1,12,12,mine ? '#bcd6e8' : '#e8e6e0'); px(g,3,3,8,2,'#7d8597'); px(g,3,6,8,1,'#7d8597'); px(g,3,9,5,3,'#b5463f'); trPaperCv[k] = c; } return trPaperCv[k]; }
 function trDrawEnemy(g, e, cam){
-  const st = e.st === 'windup' ? 'windup' : e.st === 'attack' ? 'attack' : e.st === 'stagger' || e.st === 'dead' ? 'hurt' : 'walk', fr = Math.floor(e.anim*5)%2;
+  const st = e.air ? 'hurt' : e.st === 'windup' ? 'windup' : e.st === 'attack' ? 'attack' : e.st === 'stagger' || e.st === 'dead' ? 'hurt' : 'walk', fr = Math.floor(e.anim*5)%2;
   const cv = trSprite(e.kind, st, st === 'walk' ? fr : 0, e.flash > 0), s = e.kind === 'inspector' ? 1.12 : 1.1, w = cv.width*s, h = cv.height*s, sx = e.x - cam, sy = TRN.floorY - e.y;
   g.save(); g.translate(sx, sy); g.globalAlpha = e.st === 'dead' ? e.fade : 1; if (e.face < 0) g.scale(-1, 1); if (e.st === 'dead') g.rotate(0.9*(1-e.fade)*(e.vx >= 0 ? 1 : -1));
   g.imageSmoothingEnabled = false; if (e.haste > 0) g.filter = 'sepia(1) saturate(3)'; g.drawImage(cv, -w/2, -h + 2, w, h); g.restore();
@@ -298,8 +326,8 @@ function drawTrainHUD(){
   const alive = trAlive(); if (alive) HT('RECRUITERS '+alive, DW-24, 88, 14, '#8fa66a', 'right');
   if (tp.combo > 1){ HT(tp.combo+' HIT'+(tp.combo > 1 ? 'S' : ''), DW-24, 130, 26, '#ffe14a', 'right'); }
   const sr = styleRank(); if (G.style > 1){ HT('STYLE', DW-24, 158, 13, '#a3aab8', 'right'); HT('DCBAS'[sr], DW-24, 200, 40, ['#a3aab8','#8fb4d0','#3cff8a','#ffe14a','#ff5a4a'][sr], 'right'); }
-  box(24, DH-52, 200, 12, '#2c3142'); HR(24, DH-52, 200*(1 - tp.spinCd/3.4), 12, tp.spinCd <= 0 ? '#ffe14a' : '#5a6275'); HT(tp.spinCd <= 0 ? 'WHIRLWIND READY  ('+codeName(binds.flip)+')' : 'WHIRLWIND...', 24, DH-60, 13, tp.spinCd <= 0 ? '#ffe14a' : '#a3aab8');
-  HT('A/D move   SPACE/W jump   S crouch   CLICK/J slash x3   RIGHT-CLICK/K block (early = PARRY)   Q dash   E whirlwind   ESC pause', DW/2, DH-12, 12, '#a3aab8', 'center');
+  if (hasSkill('whirlwind')){ box(24, DH-52, 200, 12, '#2c3142'); HR(24, DH-52, 200*(1 - tp.spinCd/3.4), 12, tp.spinCd <= 0 ? '#ffe14a' : '#5a6275'); HT(tp.spinCd <= 0 ? 'WHIRLWIND READY  ('+codeName(binds.flip)+')' : 'WHIRLWIND...', 24, DH-60, 13, tp.spinCd <= 0 ? '#ffe14a' : '#a3aab8'); }
+  HT('A/D move   SPACE/W jump   S crouch   CLICK/J slash x3   RIGHT-CLICK/K block (early = PARRY)   Q dash' + (hasSkill('dashslash') ? ' (+slash = DASH SLASH)' : '') + (hasSkill('whirlwind') ? '   E whirlwind' : '') + (hasSkill('launcher') ? '   3rd hit LAUNCHES' : '') + '   ESC pause', DW/2, DH-12, 12, '#a3aab8', 'center');
   for (const e of TR.es) if (e.st !== 'dead'){ const sx = (e.x - TR.cam)*2, sy = (TRN.floorY - (e.kind === 'inspector' ? 84 : 76))*2; if (sx > 0 && sx < DW){ box(sx-22, sy, 44, 5, '#2e1520'); HR(sx-22, sy, 44*Math.max(0,e.hp/e.hpMax), 5, '#8fa66a'); } }
   for (const n of TR.nums){ dctx.globalAlpha = Math.max(0, 1 - n.t/0.9); HT(String(n.v), (n.x - TR.cam)*2, (TRN.floorY - n.y)*2 - n.t*50, 22, n.c, 'center'); } dctx.globalAlpha = 1;
   const cleared = TR.spawned && TR.spawned.every(Boolean) && !trLocked() && trAlive() === 0;

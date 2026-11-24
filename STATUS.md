@@ -20,7 +20,9 @@ First-person hack & slash (three.js, plain HTML/JS, optional Electron portable e
   state `train`) through three cars, first pass ends with `TO BE CONTINUED` (Nextown, mom's order and the way back home are still to build; **chapter 2 ends only when you are home**).
   Brawler: one lane, 2D: A/D move, SPACE/W jump, S/C crouch (ducks thrown memos), click/J = 3-hit sword combo (3rd hit is heavy), right-click/K block (a block in the first ~0.2 s is a PARRY and
   staggers the attacker), Q dash (i-frames), E whirlwind (3.4 s cooldown), air attacks. Each car has scripted waves (they spawn from both screen edges and lock the camera until cleared;
-  "GO >>" unlocks the door). Enemies are the same recruiters (grunt punch, runner lunge, thrower memos you can deflect, Ticket Inspector with armour + baton sweep). Coffee drops, XP, style
+  "GO >>" unlocks the door). **Skill-gated:** WHIRLWIND (E) needs the Whirlwind skill, a slash during a dash needs DASH SLASH, heavy hits launching/juggling enemies needs LAUNCHER, a lethal hit leaving you at 25 HP needs SECOND WIND
+  (once per car); IRON GUARD widens the parry window; the dash cooldown follows FOOTWORK. The basic combo, jump, crouch, block and dash are always available. Locked moves show a hint; the HUD only lists unlocked moves.
+  **Look:** a train car interior (rounded windows with blinds, adverts, grab rail + swaying straps, continuous bench), scenery that whips past (far skyline, mid buildings, blurred telegraph poles + wires, embankment), tunnels every ~14 s (dark, streaking lights, dimmed car), rail clack sound + a small jolt and sway. Enemies are the same recruiters (grunt punch, runner lunge, thrower memos you can deflect, Ticket Inspector with armour + baton sweep). Coffee drops, XP, style
   rank and skill bonuses apply.
 - Phases (`OBJ.phase`): `arrive goto cut survive open enter (store) home gohome homecoming nextday station pulled boss bossdone gostation ticket train traindone`. Saves/Continue cover all of them
   (`beginGame(sv)`): station/boss, plaza (`backToPlaza`), station interior, and the train car you were in (`startTrain(car)`). Dying in the hall or on the train offers CONTINUE.
