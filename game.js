@@ -1290,10 +1290,12 @@ function drawHUD(){
 let menuIdx = 0, uiRects = [];
 function menuItems(){
   const sv = hasSave();
+  if (state === 'chapters') return chapterItems();
   if (state === 'dead') return deadT > 1.4 ? [ ...(sv ? [{ label:'CONTINUE', act:() => newGame(true) }] : []), { label:'NEW GAME', act:() => newGame(false) }, { label:'EXIT', act:exitGame } ] : [];
   if (state === 'menu') return [
     { label:'START', act:() => newGame(false) },
     { label: sv ? (['homecoming','nextday','station','boss','chapter2done'].includes(sv.phase) ? 'CONTINUE  (CHAPTER 2)' : 'CONTINUE  (WAVE '+(sv.wave+1)+')') : 'CONTINUE', en:!!sv, act:() => newGame(true) },
+    { label:'CHAPTER SELECT  (TESTING)', act:() => { state = 'chapters'; menuIdx = 0; } },
     { label:'OPTIONS', act:() => { optionsFrom = 'menu'; state = 'options'; menuIdx = 0; } },
     { label:'EXIT', act:exitGame } ];
   return [
@@ -1341,8 +1343,23 @@ function treeNav(items){
     return;
   }
 }
+/* ---------- chapter select (testing): jump straight to any part of chapters 1-2, keeping your current level/skills ---------- */
+function chapterItems(){
+  const run = (setup, pre) => () => { if (pre) pre(); beginGame(null, true); if (setup) setup(); };
+  return [
+    { label:'1.1   PROLOGUE + INTRO  (new game)', act:() => newGame(false) },
+    { label:'1.2   STREET:  GET TO THE STORE', act:run(null, () => { OBJ.seen = false; }) },
+    { label:'1.3   STREET WAVES  (store is closed, survive to 9 AM)', act:run(() => { Wave.breakT = 1.5; }, () => { OBJ.seen = true; }) },
+    { label:'1.4   MOO-MART  (isometric stealth store)', act:run(() => { Wave.n = 3; OBJ.seen = true; startStore(); }) },
+    { label:'1.5   THE WAY HOME  (Hiring Manager again)', act:run(() => { Wave.n = 3; OBJ.seen = true; OBJ.phase = 'home'; signSprite.material.map = openTex; beacon.visible = false; Wave.state = 'break'; Wave.breakT = 1.5; }) },
+    { label:'1.6   HOMECOMING  (mom, sleep, end of chapter 1)', act:run(() => { Wave.n = 4; OBJ.seen = true; OBJ.phase = 'homecoming'; startScene(homecomingScript); }) },
+    { label:'2.1   THE NEXT DAY  (wake up, mom, wallet + sword)', act:run(() => { Wave.n = 4; OBJ.seen = true; startNextDay(); }) },
+    { label:'2.2   STATION ROAD  (rush to the station)', act:run(() => { Wave.n = 4; OBJ.seen = true; beginStation(); }) },
+    { label:'2.3   THE CAREER COUNSELOR  (boss fight)', act:run(() => { Wave.n = 4; OBJ.seen = true; retryBoss(); }) },
+    { label:'BACK', act:() => { state = 'menu'; menuIdx = 0; } } ];
+}
 function menuNav(){
-  const items = state === 'options' ? optionRows() : state === 'skills' ? skillRows() : (state === 'menu' || state === 'paused' || state === 'dead') ? menuItems() : [];
+  const items = state === 'options' ? optionRows() : state === 'skills' ? skillRows() : (state === 'menu' || state === 'paused' || state === 'dead' || state === 'chapters') ? menuItems() : [];
   if (!items.length) return;
   if (state === 'skills'){ treeNav(items); return; }
   const side = state === 'dead' ? (pressed.ArrowRight||pressed.KeyD?1:0) - (pressed.ArrowLeft||pressed.KeyA?1:0) : 0;   // game-over buttons sit side by side
@@ -1352,6 +1369,7 @@ function menuNav(){
   if ((pressed.Enter || pressed.Space) && items[menuIdx].act && items[menuIdx].en !== false) items[menuIdx].act();
   if (pressed.Escape){
     if (state === 'options'){ state = optionsFrom; menuIdx = 0; } else if (state === 'skills'){ state = skillsFrom; menuIdx = 0; }
+    else if (state === 'chapters'){ state = 'menu'; menuIdx = 0; }
     else if (state === 'paused') resumeFromPause();
   }
 }
@@ -1370,8 +1388,13 @@ function drawMenus(){
     HR(0,0,DW,DH,'rgba(18,10,16,.42)'); HR(0,0,430,DH,'rgba(18,10,16,.55)');
     HT('THE SUPER', 62, 128, 40, '#ffe14a'); HT('SLASHER 5000', 60, 188, 52, '#e07585');
     HT(state === 'paused' ? 'PAUSED' : 'a first-person hack & slash', 62, 232, 18, '#efe3cf');
-    menuItems().forEach((it,i) => button(60, 258+i*60, 330, 50, it.label, i, it.en, it.act));
+    menuItems().forEach((it,i) => button(60, 258+i*52, 330, 46, it.label, i, it.en, it.act));
     HT('W/S or mouse to choose  -  ENTER to select', 62, DH-18, 13, '#a3aab8');
+  } else if (state === 'chapters'){
+    HR(0,0,DW,DH,'rgba(18,10,16,.82)'); HT('CHAPTER SELECT', DW/2, 48, 32, '#ffe14a', 'center'); HT('Testing only. Keeps your current skills + level. ESC or BACK to return.', DW/2, 72, 13, '#c9cdd6', 'center');
+    HT('CHAPTER 1  -  THE MILK RUN', 90, 112, 16, '#8fb4d0'); HT('CHAPTER 2  -  THE NEXT DAY', 90, 366, 16, '#8fb4d0');
+    chapterItems().forEach((it,i) => { const c1 = i < 6, k = c1 ? i : (i < 9 ? i-6 : -1); const bx = 90, by = c1 ? 122+k*34 : (i < 9 ? 376+k*34 : 482), bw = 780;
+      button(bx, by, bw, 30, it.label, i, true, it.act, { size:15 }); });
   } else if (state === 'options'){
     HR(0,0,DW,DH,'rgba(18,10,16,.78)'); HT('OPTIONS - CONTROLS', DW/2, 50, 32, '#ffe14a', 'center');
     HT('Click a row, then press the new key or mouse button  (ESC cancels).  Conflicts swap automatically.', DW/2, 74, 13, '#c9cdd6', 'center');
@@ -1521,7 +1544,7 @@ function render(now){
   else drawMenus();
 }
 function idleCamera(real){
-  if (state === 'menu' || state === 'options' || state === 'exited'){
+  if (state === 'menu' || state === 'options' || state === 'chapters' || state === 'exited'){
     const t = performance.now()/1000;
     camera.position.set(Math.sin(t*0.12)*7, 2.2+Math.sin(t*0.2)*0.3, 19); camera.rotation.set(0.12, Math.sin(t*0.12)*-0.12, 0);
     if (camera.fov !== 80){ camera.fov = 80; camera.updateProjectionMatrix(); }

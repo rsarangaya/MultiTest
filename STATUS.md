@@ -1,6 +1,6 @@
 # STATUS - The Super Slasher 5000
 
-Updated: 2026-11-24
+Updated: 2026-11-24 (chapter select added)
 
 ## What it is
 First-person hack & slash (three.js, plain HTML/JS, optional Electron portable exe). Pixel-art look from the *Dead-End Job* opening
@@ -17,6 +17,10 @@ First-person hack & slash (three.js, plain HTML/JS, optional Electron portable e
   away, thrown (tumbling camera) into the station hall -> **1v1 vs the Career Counselor** (coffee drops every ~10 s) -> `END OF CHAPTER 2 / TO BE CONTINUED`.
 - Phases (`OBJ.phase`): `arrive goto cut survive open enter (store) home gohome homecoming nextday station pulled boss chapter2done`. Saves/Continue cover all of them
   (`beginGame(sv)`), and dying in the hall offers CONTINUE which drops you back in the hall (`retryBoss`).
+
+## Testing helper
+- **CHAPTER SELECT (TESTING)** on the main menu (`chapterItems()` in `game.js`): jump to 1.1 intro, 1.2 street, 1.3 waves, 1.4 store, 1.5 way home, 1.6 homecoming,
+  2.1 next day, 2.2 Station Road, 2.3 Career Counselor. Keeps your current level/skills (debug key 7 maxes them). Remove the menu item + `chapterItems()` when done testing.
 
 ## Files
 `index.html`, `art.js` (textures, facades incl. the station), `sprites.js` (people, enemies, bosses incl. the Career Counselor), `world.js` (street), `game.js` (logic, HUD,
