@@ -22,6 +22,9 @@ First-person hack & slash (three.js, plain HTML/JS, optional Electron portable e
   staggers the attacker), Q dash (i-frames), E whirlwind (3.4 s cooldown), air attacks. Each car has scripted waves (they spawn from both screen edges and lock the camera until cleared;
   "GO >>" unlocks the door). **Skill-gated:** WHIRLWIND (E) needs the Whirlwind skill, a slash during a dash needs DASH SLASH, heavy hits launching/juggling enemies needs LAUNCHER, a lethal hit leaving you at 25 HP needs SECOND WIND
   (once per car); IRON GUARD widens the parry window; the dash cooldown follows FOOTWORK. The basic combo, jump, crouch, block and dash are always available. Locked moves show a hint; the HUD only lists unlocked moves.
+  **Feel (second pass):** attack/jump/dash/whirlwind presses are buffered ~0.2 s (read every frame, so none are lost in hit-stop, and combos chain from a mash); walking eases in/out; every swing steps
+  forward and has wind-up / strike / recover poses; hit-stop is shorter; everything draws on whole pixels. Enemies spawn just off-screen, walk in (`entering`), then are clamped inside the locked screen
+  (`trClampE`), so none sit outside the picture.
   **Cars:** 5 (CAR 1-4 + the BOSS CAR). **More enemies:** INTERN (tiny, fast, 2 HP, comes in swarms), SECURITY GUARD (riot shield blocks light front hits; the heavy 3rd hit, whirlwind, dash slash,
   jump-ins and hits from behind get through; a heavy hit breaks the shield for ~2 s). **Boss: THE EFFICIENCY CONSULTANT** (`trUpdateConsultant`, HP 70, ignores light hits): PINK SLIPS (low = jump, mid = crouch),
   a WARP behind you (red marker) into a snip, a SLAM with floor shockwaves (jump them); at 75 / 50 / 25% HP he DOWNSIZES: bulkheads slam in and shrink the arena (452 -> ~234 px) and he calls in

@@ -23,7 +23,7 @@ function trSprite(kind, state, frame, white){
   if (white){ const w = mkCanvas(c.width, c.height), g = w.getContext('2d'); g.drawImage(c,0,0); g.globalCompositeOperation = 'source-atop'; g.fillStyle = '#fff'; g.fillRect(0,0,w.width,w.height); c = w; }
   return trSprites[key] = c;
 }
-function trPlayerNew(x){ return { x, y:0, vy:0, vx:0, face:1, st:'idle', t:0, combo:0, comboT:0, chainT:0, lastIdx:0, idx:0, hit:false, queued:false, inv:0, spinCd:0, dashCd:0, blockT:0, crouch:false, walkT:0, air:false }; }
+function trPlayerNew(x){ return { x, y:0, vy:0, vx:0, mvx:0, buf:0, jbuf:0, dbuf:0, sbuf:0, face:1, st:'idle', t:0, combo:0, comboT:0, chainT:0, lastIdx:0, idx:0, hit:false, queued:false, inv:0, spinCd:0, dashCd:0, blockT:0, crouch:false, walkT:0, air:false }; }
 
 /* ---------- start / car setup ---------- */
 function startTrain(car){
@@ -55,7 +55,7 @@ function trSpawn(kind, x){
 function trSpawnWave(w){
   if (w.boss){ trSpawnBoss(); return; }
   const cam = TR.cam; TR.lockCam = cam; let l = 0, r = 0;
-  w.e.forEach((k, i) => { const left = (i % 2 === 0) && cam > 60; trSpawn(k, left ? cam - 28 - (l++)*26 : cam + TRN.W + 28 + (r++)*26); });
+  w.e.forEach((k, i) => { const left = (i % 2 === 0) && cam > 60; trSpawn(k, left ? cam - 28 - (l++)*26 : cam + TRN.W + 28 + (r++)*26); TR.es[TR.es.length-1].entering = true; });
   msg('HERE THEY COME!', 1.2, '#ff5a4a'); sfx.wave();
 }
 function trHurtPlayer(dmg, fromX, e, heavy){
@@ -84,18 +84,21 @@ function trHitEnemy(e, dmg, knock, heavy){
   dmg *= mul; e.hp -= dmg; e.flash = 0.09; trSpark(e.x, 50, '#efe3cf', 6); TR.nums.push({ x:e.x, y:76, v:Math.round(dmg*10), t:0, c: heavy ? '#ffe14a' : '#efe3cf' });
   tp.combo++; tp.comboT = 2.2; G.style = Math.min(100, G.style + 3); G.combo = tp.combo; G.comboT = 2.2;
   const dir = e.x >= tp.x ? 1 : -1;
-  if (e.hp <= 0){ if (e.kind === 'consultant') trBossDown(e); e.st = 'dead'; e.t = 0; e.vx = dir*(knock + 60); G.kills++; gainXp(Math.round(TE[e.kind].xp*(1+styleRank()*0.25))); P.hp = Math.min(P.maxHp, P.hp + 2); if (Math.random() < ({ inspector:0.7, guard:0.5, intern:0.12, consultant:0 }[e.kind] ?? 0.3)) TR.cof.push({ x:e.x, t:0 }); TR.stop = 0.07; TR.shake = 0.4; sfx.hit(); return; }
+  if (e.hp <= 0){ if (e.kind === 'consultant') trBossDown(e); e.st = 'dead'; e.t = 0; e.vx = dir*(knock + 60); G.kills++; gainXp(Math.round(TE[e.kind].xp*(1+styleRank()*0.25))); P.hp = Math.min(P.maxHp, P.hp + 2); if (Math.random() < ({ inspector:0.7, guard:0.5, intern:0.12, consultant:0 }[e.kind] ?? 0.3)) TR.cof.push({ x:e.x, t:0 }); TR.stop = 0.05; TR.shake = 0.4; sfx.hit(); return; }
   if (hasSkill('launcher') && (heavy || e.air) && e.kind !== 'consultant'){ e.air = true; e.vy = e.y > 4 ? Math.max(e.vy, 190) : 330; e.vx = dir*(e.y > 4 ? 40 : 90); e.st = 'stagger'; e.t = 0; e.hit = false; if (!tp.air && tp.y <= 0 && !e.wasAir){ e.wasAir = true; msg('LAUNCH!', 0.6, '#ffe14a'); } TR.stop = 0.07; TR.shake = Math.max(TR.shake, 0.3); sfx.hit(); return; }   // LAUNCHER skill: heavy hits send them up; hit them again to juggle
   if ((e.kind === 'inspector' || e.kind === 'consultant') && !heavy){ e.vx += dir*(e.kind === 'consultant' ? 12 : 30); sfx.hit(); TR.stop = 0.03; return; }                     // elite: light hits do not stagger him
-  e.st = 'stagger'; e.t = 0; e.vx = dir*knock; e.hit = false; TR.stop = heavy ? 0.08 : 0.045; TR.shake = Math.max(TR.shake, heavy ? 0.4 : 0.15); sfx.hit();
+  e.st = 'stagger'; e.t = 0; e.vx = dir*knock; e.hit = false; TR.stop = heavy ? 0.05 : 0.028; TR.shake = Math.max(TR.shake, heavy ? 0.4 : 0.15); sfx.hit();
 }
 const momentumTrain = () => 1 + 0.15*styleRank();                                                       // S-rank brawlers hit harder
+function trClampE(e){ if (TR.lockCam !== null && !e.entering){ const lo = (TR.arenaL !== null ? TR.arenaL : TR.lockCam) + 10, hi = (TR.arenaR !== null ? TR.arenaR : TR.lockCam + TRN.W) - 10; e.x = Math.max(lo, Math.min(hi, e.x)); } }
 function trUpdateEnemy(e, dt){
   const tp = TR.tp, sp = TE[e.kind], dx = tp.x - e.x, d = Math.abs(dx), dir = dx >= 0 ? 1 : -1;
   e.anim += dt; e.flash = Math.max(0, e.flash - dt); e.cd -= dt; e.t += dt;
-  if (e.air && e.st !== 'dead'){ e.vy -= 820*dt; e.y += e.vy*dt; e.x += e.vx*dt; e.vx *= Math.pow(0.3, dt); if (e.y <= 0){ e.y = 0; e.vy = 0; e.air = false; e.wasAir = false; e.st = 'stagger'; e.t = 0; e.vx = 0; trSpark(e.x, 4, '#e8e6e0', 5); } return; }
+  if (e.air && e.st !== 'dead'){ e.vy -= 820*dt; e.y += e.vy*dt; e.x += e.vx*dt; e.vx *= Math.pow(0.3, dt); trClampE(e); if (e.y <= 0){ e.y = 0; e.vy = 0; e.air = false; e.wasAir = false; e.st = 'stagger'; e.t = 0; e.vx = 0; trSpark(e.x, 4, '#e8e6e0', 5); } return; }
   if (e.st === 'dead'){ e.x += e.vx*dt; e.vx *= Math.pow(0.02, dt); e.fade = Math.max(0, 1 - e.t/0.7); return; }
-  if (e.st === 'stagger'){ e.x += e.vx*dt; e.vx *= Math.pow(0.03, dt); if (e.t >= (e.kind === 'inspector' || e.kind === 'consultant' ? 0.5 : 0.38)){ e.st = 'walk'; e.cd = Math.max(e.cd, 0.4); } return; }
+  if (e.st === 'stagger'){ e.x += e.vx*dt; e.vx *= Math.pow(0.03, dt); trClampE(e); if (e.t >= (e.kind === 'inspector' || e.kind === 'consultant' ? 0.5 : 0.38)){ e.st = 'walk'; e.cd = Math.max(e.cd, 0.4); } return; }
+  if (e.entering){ const lo = (TR.lockCam !== null ? TR.lockCam : TR.cam) + 12, hi = lo + TRN.W - 24;                      // just spawned off-screen: walk in first, no attacking from outside the picture
+    if (e.x >= lo && e.x <= hi) e.entering = false; else { e.face = e.x < lo ? 1 : -1; e.x += e.face*Math.max(sp.spd*1.5, 105)*dt; return; } }
   if (e.broken > 0) e.broken -= dt;
   if (e.kind === 'consultant'){ trUpdateConsultant(e, dt); if (TR.arenaL !== null) e.x = Math.max(TR.arenaL + 16, Math.min(TR.arenaR - 16, e.x)); return; }
   const spd = sp.spd*(e.haste > 0 ? 1.4 : 1);
@@ -134,7 +137,7 @@ function trUpdateEnemy(e, dt){
   }
   if (e.haste > 0) e.haste -= dt;
   for (const o of TR.es) if (o !== e && o.st !== 'dead'){ const gap = e.x - o.x; if (Math.abs(gap) < 18){ e.x += (gap >= 0 ? 1 : -1)*40*dt; } }       // do not stack on each other
-  e.x = Math.max(-60, Math.min(TRN.carW + 60, e.x)); if (TR.arenaL !== null) e.x = Math.max(TR.arenaL + 10, Math.min(TR.arenaR - 10, e.x));
+  e.x = Math.max(-60, Math.min(TRN.carW + 60, e.x)); trClampE(e);
 }
 
 /* ---------- the Efficiency Consultant (boss): pink slips (jump / crouch), a warp-behind-you snip, a slam with floor shockwaves; at 75/50/25% HP he DOWNSIZES the car (bulkheads close in) ---------- */
@@ -195,15 +198,15 @@ function trBossDown(e){
 }
 
 /* ---------- the player ---------- */
-const ATK = [ { dur:0.26, hit:0.09, reach:46, dmg:1.2, knock:70, heavy:false }, { dur:0.26, hit:0.09, reach:48, dmg:1.2, knock:70, heavy:false }, { dur:0.42, hit:0.16, reach:62, dmg:2.4, knock:190, heavy:true } ];
+const ATK = [ { dur:0.24, hit:0.07, reach:46, dmg:1.2, knock:70, heavy:false, step:95 }, { dur:0.24, hit:0.07, reach:48, dmg:1.2, knock:70, heavy:false, step:95 }, { dur:0.38, hit:0.13, reach:62, dmg:2.4, knock:190, heavy:true, step:170 } ];
 function trUpdatePlayer(dt){
   const tp = TR.tp, L = held('left') || keys.ArrowLeft, R = held('right') || keys.ArrowRight, down = held('back') || held('slide') || keys.ArrowDown;
-  const jump = tapped('jump') || tapped('forward') || pressed.ArrowUp, atk = tapped('attack') || pressed.KeyJ, blk = held('block') || keys.KeyK, dash = tapped('dash'), spin = tapped('flip');
+  const jump = tp.jbuf > 0, atk = tp.buf > 0, blk = held('block') || keys.KeyK, dash = tp.dbuf > 0, spin = tp.sbuf > 0;                  // presses are buffered (see updateTrain) so none get lost in hit-stop
   tp.t += dt; tp.chainT = Math.max(0, (tp.chainT||0) - dt); tp.inv = Math.max(0, tp.inv - dt); tp.spinCd = Math.max(0, tp.spinCd - dt); tp.dashCd = Math.max(0, tp.dashCd - dt); tp.comboT -= dt; if (tp.comboT <= 0) tp.combo = 0;
   const ground = tp.y <= 0 && tp.vy <= 0, busy = tp.st === 'atk' || tp.st === 'hurt' || tp.st === 'dash' || tp.st === 'spin';
   /* actions */
   if (tp.st === 'hurt'){ if (tp.t > 0.32) tp.st = 'idle'; }
-  else if (tp.st === 'dash'){ tp.x += tp.face*430*dt; if (atk && tp.t > 0.03){ if (hasSkill('dashslash')){ trStartAtk(tp, 0); tp.dashAtk = true; tp.vx = tp.face*300; msg('DASH SLASH!', 0.5, '#ffe14a'); } else if (!tp.lockMsg || TR.t - tp.lockMsg > 1.5){ tp.lockMsg = TR.t; msg('DASH SLASH IS LOCKED  (PAUSE > SKILLS)', 1.2, '#a3aab8'); } } else if (tp.t > 0.17){ tp.st = 'idle'; tp.vx = 0; } }
+  else if (tp.st === 'dash'){ tp.x += tp.face*430*dt; tp.mvx = tp.face*200; if (atk && tp.t > 0.03){ tp.buf = 0; if (hasSkill('dashslash')){ trStartAtk(tp, 0); tp.dashAtk = true; tp.vx = tp.face*300; msg('DASH SLASH!', 0.5, '#ffe14a'); } else if (!tp.lockMsg || TR.t - tp.lockMsg > 1.5){ tp.lockMsg = TR.t; msg('DASH SLASH IS LOCKED  (PAUSE > SKILLS)', 1.2, '#a3aab8'); } } else if (tp.t > 0.17){ tp.st = 'idle'; tp.vx = 0; } }
   else if (tp.st === 'spin'){
     if (!tp.hit && tp.t > 0.14){ tp.hit = true; let n = 0; for (const e of TR.es) if (e.st !== 'dead' && Math.abs(e.x - tp.x) < 72){ trHitEnemy(e, 2.2, 200, true); n++; } for (const p of TR.pr) if (!p.mine && Math.abs(p.x - tp.x) < 72){ p.mine = true; p.vx = -p.vx*1.4; } if (n) TR.stop = 0.08; sfx.swing(); TR.shake = 0.3; }
     if (tp.t > 0.46){ tp.st = 'idle'; }
@@ -215,21 +218,24 @@ function trUpdatePlayer(dt){
       for (const e of TR.es) if (e.st !== 'dead'){ const rx = (e.x - tp.x)*tp.face; if (rx > -12 && rx < reach + 12) { trHitEnemy(e, a.dmg, a.knock, a.heavy); n++; } }
       for (const p of TR.pr) if (!p.mine){ const rx = (p.x - tp.x)*tp.face; if (rx > -6 && rx < reach + 14){ p.mine = true; p.vx = -p.vx*1.5; sfx.parry(); msg('DEFLECT!', 0.6, '#8fb4d0'); } }
       if (!n) sfx.swing(); }
-    if (atk && tp.t > a.dur*0.4) tp.queued = true;
-    if (tp.t >= a.dur){ if (tp.queued && !tp.air && tp.idx < 2){ trStartAtk(tp, tp.idx + 1); } else { tp.st = 'idle'; tp.vx = 0; tp.chainT = 0.4; } }
+    if (!tp.air && !tp.dashAtk){ tp.x += tp.mvx*dt; tp.mvx *= Math.pow(0.003, dt); }                                       // a little step forward into every swing, easing out
+    if (atk && tp.t > a.dur*0.25){ tp.queued = true; tp.buf = 0; }
+    if (tp.t >= a.dur){ if (tp.queued && !tp.air && tp.idx < 2){ trStartAtk(tp, tp.idx + 1); } else { tp.st = 'idle'; tp.vx = 0; tp.chainT = 0.35; } }
   }
   if (tp.st === 'idle' || tp.st === 'walk' || tp.st === 'block' || tp.st === 'jump'){
-    if (dash && tp.dashCd <= 0 && ground){ tp.st = 'dash'; tp.t = 0; tp.inv = Math.max(tp.inv, 0.22); tp.dashCd = 0.9 - 0.12*rank('footwork'); sfx.dash(); tp.face = L ? -1 : R ? 1 : tp.face; }
-    else if (spin && !hasSkill('whirlwind')){ if (!tp.lockMsg || TR.t - tp.lockMsg > 1.5){ tp.lockMsg = TR.t; msg('WHIRLWIND IS LOCKED  (PAUSE > SKILLS)', 1.2, '#a3aab8'); } }
-    else if (spin && tp.spinCd <= 0){ tp.st = 'spin'; tp.t = 0; tp.hit = false; tp.spinCd = 3.4; tp.inv = Math.max(tp.inv, 0.4); G.fovPunch = 1; msg('WHIRLWIND!', 0.7, '#ffe14a'); }
-    else if (atk){ tp.air = !ground; trStartAtk(tp, !tp.air && tp.chainT > 0 && tp.lastIdx < 2 ? tp.lastIdx + 1 : 0); }
+    if (dash && tp.dashCd <= 0 && ground){ tp.dbuf = 0; tp.st = 'dash'; tp.t = 0; tp.inv = Math.max(tp.inv, 0.22); tp.dashCd = 0.9 - 0.12*rank('footwork'); sfx.dash(); tp.face = L ? -1 : R ? 1 : tp.face; }
+    else if (spin && !hasSkill('whirlwind')){ tp.sbuf = 0; if (!tp.lockMsg || TR.t - tp.lockMsg > 1.5){ tp.lockMsg = TR.t; msg('WHIRLWIND IS LOCKED  (PAUSE > SKILLS)', 1.2, '#a3aab8'); } }
+    else if (spin && tp.spinCd <= 0){ tp.sbuf = 0; tp.st = 'spin'; tp.t = 0; tp.hit = false; tp.spinCd = 3.4; tp.inv = Math.max(tp.inv, 0.4); G.fovPunch = 1; msg('WHIRLWIND!', 0.7, '#ffe14a'); }
+    else if (atk){ tp.buf = 0; tp.air = !ground; trStartAtk(tp, !tp.air && tp.chainT > 0 && tp.lastIdx < 2 ? tp.lastIdx + 1 : 0); }
     else if (blk && ground){ if (tp.st !== 'block'){ tp.st = 'block'; tp.blockT = 0; } tp.blockT += dt; tp.vx = 0; }
     else {
       if (tp.st === 'block') tp.st = 'idle';
       tp.crouch = down && ground;
-      const mv = tp.crouch ? 0 : (R ? 1 : 0) - (L ? 1 : 0);
-      if (mv){ tp.face = mv; tp.x += mv*(ground ? 122 : 100)*dt; tp.walkT += dt; if (ground) tp.st = 'walk'; } else if (ground) tp.st = 'idle';
-      if (jump && ground && !tp.crouch){ tp.vy = 345; tp.st = 'jump'; sfx.jump(); }
+      const mv = tp.crouch ? 0 : (R ? 1 : 0) - (L ? 1 : 0), want = mv*(ground ? 122 : 104);
+      tp.mvx += (want - tp.mvx)*Math.min(1, dt*(mv ? (ground ? 18 : 7) : (ground ? 24 : 3)));                              // ease in/out instead of snapping
+      if (!mv && Math.abs(tp.mvx) < 3) tp.mvx = 0; tp.x += tp.mvx*dt;
+      if (mv){ tp.face = mv; tp.walkT += dt*Math.max(0.5, Math.abs(tp.mvx)/122); if (ground) tp.st = 'walk'; } else if (ground) tp.st = Math.abs(tp.mvx) > 12 ? 'walk' : 'idle';
+      if (jump && ground && !tp.crouch){ tp.jbuf = 0; tp.vy = 345; tp.st = 'jump'; sfx.jump(); }
     }
   }
   /* physics */
@@ -240,7 +246,7 @@ function trUpdatePlayer(dt){
   if (TR.arenaL !== null){ lo = Math.max(lo, TR.arenaL + 12); hi = Math.min(hi, TR.arenaR - 12); }
   tp.x = Math.max(lo, Math.min(hi, tp.x));
 }
-function trStartAtk(tp, idx){ tp.dashAtk = false; tp.st = 'atk'; tp.t = 0; tp.hit = false; tp.queued = false; tp.idx = idx; tp.lastIdx = idx; tp.chainT = 0; if (!tp.air) tp.vx = 0; }
+function trStartAtk(tp, idx){ tp.dashAtk = false; tp.st = 'atk'; tp.t = 0; tp.hit = false; tp.queued = false; tp.idx = idx; tp.lastIdx = idx; tp.chainT = 0; tp.vx = 0; if (!tp.air) tp.mvx = tp.face*ATK[idx].step; }
 
 /* ---------- main update (fixed sub-steps) ---------- */
 function updateTrain(real){
@@ -249,6 +255,7 @@ function updateTrain(real){
   TR.t += real; TR.rumble -= real; if (TR.rumble <= 0){ TR.rumble = 0.5556; noise(0.07, 0.1, 380); tone('square', 78, 52, 0.08, 0.07); setTimeout(() => { noise(0.06, 0.07, 320); tone('square', 70, 48, 0.07, 0.05); }, 150); }   // clack-clack of the rail joints
   { const tn = trTunnel(TR.t); if (tn > 0.9 && !TR.inTun){ TR.inTun = true; noise(0.6, 0.12, 200); } else if (tn < 0.1) TR.inTun = false; }
   TR.shake = Math.max(0, TR.shake - real*2); TR.stop = Math.max(0, TR.stop - real);
+  { const tp = TR.tp; if (tp){ if (tapped('attack') || pressed.KeyJ) tp.buf = 0.24; if (tapped('jump') || tapped('forward') || pressed.ArrowUp) tp.jbuf = 0.15; if (tapped('dash')) tp.dbuf = 0.17; if (tapped('flip')) tp.sbuf = 0.17; } }
   for (const m of G.msgs) m.t -= real; G.msgs = G.msgs.filter(m => m.t > 0);
   G.style = Math.max(0, G.style - real*2); G.vign = Math.max(0, G.vign - real*1.6);
   if (TR.stop <= 0){
@@ -272,7 +279,8 @@ function updateTrain(real){
   if (TR.over || state !== 'train') return;
   /* camera + waves + the way out */
   const tp = TR.tp, car = CARS[TR.car];
-  if (!trLocked()){ const tgt = Math.max(0, Math.min(TRN.carW - TRN.W, tp.x - 210)); TR.cam += (tgt - TR.cam)*Math.min(1, real*6); }
+  tp.buf -= real; tp.jbuf -= real; tp.dbuf -= real; tp.sbuf -= real;
+  if (!trLocked()){ const tgt = Math.max(0, Math.min(TRN.carW - TRN.W, tp.x - 210)); TR.cam += (tgt - TR.cam)*(1 - Math.exp(-real*9)); }
   car.waves.forEach((w, i) => { if (!TR.spawned[i] && tp.x >= w.x && !trLocked()){ TR.spawned[i] = true; trSpawnWave(w); } });
   if (TR.arenaL !== null){ const oL = TR.arenaL, oR = TR.arenaR; TR.arenaL += (TR.arenaLt - TR.arenaL)*Math.min(1, real*5); TR.arenaR += (TR.arenaRt - TR.arenaR)*Math.min(1, real*5); if (Math.abs(TR.arenaL - oL) + Math.abs(TR.arenaR - oR) > 0.6) TR.shake = Math.max(TR.shake, 0.18); }
   for (const sy of TR.says) sy.t -= real; TR.says = TR.says.filter(sy => sy.t > 0);
@@ -366,12 +374,12 @@ function drawTrain(g){
       const ex = edge > 0 ? x1 - 9 : x0; for (let yy = 0; yy < 270; yy += 16){ g.fillStyle = (yy/16)%2 ? '#1b1f2e' : '#ffe14a'; g.fillRect(ex, yy, 9, 8); g.fillStyle = (yy/16)%2 ? '#ffe14a' : '#1b1f2e'; g.fillRect(ex, yy + 8, 9, 8); } };
     panel(-30, lx, 1); panel(rx, 510, -1);
   }
-  for (const c of TR.cof){ const sx = c.x - cam; g.drawImage(trCup(), sx - 6, fy - 22 + Math.sin(t*5)*2, 12, 16); }
+  for (const c of TR.cof){ const sx = Math.round(c.x - cam); g.drawImage(trCup(), sx - 6, Math.round(fy - 22 + Math.sin(t*5)*2), 12, 16); }
   const tp = TR.tp, list = [];
   for (const e of TR.es) list.push({ x:e.x, f:() => trDrawEnemy(g, e, cam) });
   list.push({ x:tp.x, f:() => trDrawPlayer(g, tp, cam) });
   list.sort((a,b) => a.x - b.x).forEach(o => o.f());
-  for (const p of TR.pr){ const sx = p.x - cam, sy = fy - p.y;
+  for (const p of TR.pr){ const sx = Math.round(p.x - cam), sy = Math.round(fy - p.y);
     if (p.wave){ const dr = Math.sign(p.vx); g.fillStyle = '#ff5a8a'; g.beginPath(); g.moveTo(sx - 10*dr, fy); g.lineTo(sx + 4*dr, fy - 22); g.lineTo(sx + 12*dr, fy); g.fill(); g.fillStyle = '#ffa0c0'; g.beginPath(); g.moveTo(sx - 3*dr, fy); g.lineTo(sx + 5*dr, fy - 12); g.lineTo(sx + 9*dr, fy); g.fill(); continue; }
     g.save(); g.translate(sx, sy); g.rotate(TR.t*14*Math.sign(p.vx)); if (p.slip && !p.mine){ g.fillStyle = NAVY; g.fillRect(-8, -6, 16, 12); g.fillStyle = '#ffb0c8'; g.fillRect(-7, -5, 14, 10); g.fillStyle = '#b5463f'; g.fillRect(-5, -2, 10, 2); g.fillRect(-5, 1, 6, 2); } else g.drawImage(trPaper(p.mine), -6, -6, 12, 12); g.restore(); }
   for (const f of TR.fx){ g.globalAlpha = Math.max(0, 1 - f.t/0.5); g.fillStyle = f.col; g.fillRect(f.x - cam - 1, fy - f.y - 1, 3, 3); } g.globalAlpha = 1;
@@ -392,7 +400,7 @@ function trBossPose(e){
 function trDrawEnemy(g, e, cam){
   const boss = e.kind === 'consultant';
   const st = boss ? trBossPose(e) : e.air ? 'hurt' : e.st === 'windup' ? 'windup' : e.st === 'attack' ? 'attack' : e.st === 'stagger' || e.st === 'dead' ? 'hurt' : 'walk', fr = Math.floor(e.anim*5)%2;
-  const cv = trSprite(e.kind, st, st === 'walk' ? fr : 0, e.flash > 0), s = TSIZE[e.kind] || 1.1, w = cv.width*s, h = cv.height*s, sx = e.x - cam, sy = TRN.floorY - e.y;
+  const cv = trSprite(e.kind, st, st === 'walk' ? fr : 0, e.flash > 0), s = TSIZE[e.kind] || 1.1, w = cv.width*s, h = cv.height*s, sx = Math.round(e.x - cam), sy = Math.round(TRN.floorY - e.y);
   if (boss && e.st === 'warp' && e.t >= 0.3 && e.t < 0.9){ const mx = e.dest - cam; g.fillStyle = 'rgba(255,90,138,.5)'; g.beginPath(); g.ellipse(mx, TRN.floorY + 1, 24, 5, 0, 0, 6.3); g.fill(); g.strokeStyle = '#ff5a8a'; g.lineWidth = 2; g.beginPath(); g.ellipse(mx, TRN.floorY + 1, 24 - (e.t*14)%8, 5, 0, 0, 6.3); g.stroke(); }
   g.save(); g.translate(sx, sy); g.globalAlpha = e.st === 'dead' ? e.fade : boss ? Math.max(0, e.fade) : 1; if (e.face < 0) g.scale(-1, 1); if (e.st === 'dead') g.rotate(0.9*(1-e.fade)*(e.vx >= 0 ? 1 : -1));
   g.imageSmoothingEnabled = false; if (e.haste > 0) g.filter = 'sepia(1) saturate(3)'; g.drawImage(cv, -w/2, -h + 2, w, h);
@@ -406,8 +414,9 @@ function trDrawEnemy(g, e, cam){
   if (e.st === 'windup' && !boss){ g.fillStyle = '#ff5a4a'; g.fillRect(sx - 1, sy - h - 8, 3, 6); g.fillRect(sx - 1, sy - h - 1, 3, 2); }          // "!" telegraph
 }
 function trDrawPlayer(g, tp, cam){
-  const pose = tp.st === 'atk' ? 'reach' : tp.st === 'block' ? 'holdsword' : tp.st === 'spin' ? 'holdsword' : tp.st === 'jump' || tp.y > 2 ? 'walk0' : tp.crouch ? 'sit' : tp.st === 'walk' || tp.st === 'dash' ? (Math.floor(tp.walkT/0.14)%2 ? 'walk1' : 'walk0') : 'stand';
-  const cv = trSprite('player', pose, 0, false), s = 0.98, w = cv.width*s, h = cv.height*s, sx = tp.x - cam, sy = TRN.floorY - tp.y;
+  const ad = tp.air ? { dur:0.3, hit:0.1 } : ATK[tp.idx] || ATK[0], atkPose = tp.t < ad.hit ? 'holdsword' : tp.t < ad.dur*0.78 ? 'reach' : 'stand';          // wind-up, strike, recover
+  const pose = tp.st === 'atk' ? atkPose : tp.st === 'block' ? 'holdsword' : tp.st === 'spin' ? 'holdsword' : tp.st === 'jump' || tp.y > 2 ? 'walk0' : tp.crouch ? 'sit' : tp.st === 'walk' || tp.st === 'dash' ? (Math.floor(tp.walkT/0.14)%2 ? 'walk1' : 'walk0') : 'stand';
+  const cv = trSprite('player', pose, 0, false), s = 0.98, w = cv.width*s, h = cv.height*s, sx = Math.round(tp.x - cam), sy = Math.round(TRN.floorY - tp.y);
   g.fillStyle = 'rgba(0,0,0,.3)'; g.beginPath(); g.ellipse(sx, TRN.floorY + 1, 13 - tp.y*0.05, 3, 0, 0, 6.3); g.fill();
   if (tp.st === 'dash') for (let i=1;i<4;i++){ g.save(); g.globalAlpha = 0.25/i; g.translate(sx - tp.face*i*13, sy); if (tp.face < 0) g.scale(-1,1); g.drawImage(cv, -w/2, -h + 2, w, h); g.restore(); }
   g.save(); g.translate(sx, sy); if ((tp.st === 'spin' ? (Math.floor(tp.t*14)%2 ? -tp.face : tp.face) : tp.face) < 0) g.scale(-1, 1);          // whirlwind: the body flicks left/right while the blades sweep round
@@ -422,6 +431,7 @@ function trDrawPlayer(g, tp, cam){
       const th = tp.t*30; for (const o of [0, Math.PI]){ const an = th + o, bx = sx + Math.cos(an)*10, by = cy + Math.sin(an)*3, ex = sx + Math.cos(an)*56, ey = cy + Math.sin(an)*16;      // two sword blades sweeping around you
         g.strokeStyle = NAVY; g.lineWidth = 6; g.beginPath(); g.moveTo(bx, by); g.lineTo(ex, ey); g.stroke(); g.strokeStyle = '#e8e6e0'; g.lineWidth = 3; g.beginPath(); g.moveTo(bx, by); g.lineTo(ex, ey); g.stroke(); g.strokeStyle = '#a3aab8'; g.lineWidth = 1; g.beginPath(); g.moveTo(bx, by); g.lineTo(ex, ey); g.stroke(); } }
     else { const R = a.reach + 6, a0 = (tp.idx === 1 ? 1.0 : -1.2) , sweep = (tp.idx === 1 ? -2.2 : 2.2) * Math.min(1, k*1.8), ang0 = tp.face > 0 ? a0 : Math.PI - a0, dirn = tp.face > 0 ? 1 : -1;
+      if (tp.t < a.hit - 0.01) { g.restore(); return; }                                                                // wind-up: only the raised sword of the sprite, no swing yet
       g.globalAlpha = Math.max(0, 1 - k*0.9); g.strokeStyle = '#fdf6e3'; g.lineWidth = tp.idx === 2 ? 7 : 5; g.beginPath(); g.arc(cx - tp.face*6, cy + 6, R*0.8, ang0, ang0 + dirn*sweep, dirn*sweep < 0); g.stroke();
       g.globalAlpha = 1; g.strokeStyle = NAVY; g.lineWidth = 5; const tx = cx + tp.face*(R*0.8)*Math.cos(Math.min(1,k*1.8)*0.8 - 0.6), ty = cy + 4 + Math.sin(k*3 - 1)*14; g.beginPath(); g.moveTo(cx, cy + 6); g.lineTo(tx, ty); g.stroke(); g.strokeStyle = '#e8e6e0'; g.lineWidth = 3; g.beginPath(); g.moveTo(cx, cy + 6); g.lineTo(tx, ty); g.stroke(); }
     g.restore();
